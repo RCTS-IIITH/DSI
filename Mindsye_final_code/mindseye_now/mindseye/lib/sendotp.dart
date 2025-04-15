@@ -64,7 +64,7 @@ extension on http.Response {
 Future<bool> verifyOtp(String dialCode, String phoneNumber, String otp) async {
   try {
     TwilioResponse response = await twilioFlutter.verifyCode(
-      verificationServiceId: 'VA7a7ce8fb1464c6b77d3a6668adae518a',
+      // verificationServiceId: 'VA7a7ce8fb1464c6b77d3a6668adae518a',
       recipient: '$dialCode${phoneNumber.replaceAll(" ", "")}',
       code: otp,
     );
