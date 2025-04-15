@@ -5,11 +5,10 @@ import 'package:twilio_flutter/twilio_flutter.dart';
 import 'package:http/http.dart' as http;
 // Initialize Twilio
 //final twilioFlutter = TwilioFlutter(
-//accountSid:// 'AC655a82471fb07e0076281ba18e252cbf', // Replace with your Account SID
-//authToken: //'5b69e432151eacc7cad7543278437f0c', // Replace with your Auth Token
+//accountSid://// Replace with your Account SID
+//authToken: //'// Replace with your Auth Token
 //twilioNumber: '+91', // Replace with your Twilio number
-
-// : 'VA4ca04d1e5b3e7b73c514c711479f56a4',// Replace with your Verification Service Id
+// Replace with your Verification Service Id
 //);
 
 // Function to send OTP
@@ -41,7 +40,7 @@ Future<void> sendOtp(
   print("User found");
 
   TwilioResponse response = await twilioFlutter.sendVerificationCode(
-    //verificationServiceId: 'VA7a7ce8fb1464c6b77d3a6668adae518a',
+    //verificationServiceId:',
     recipient: '$dialCode${phoneNumber.replaceAll(" ", "")}',
     verificationChannel: VerificationChannel.SMS,
   );
@@ -64,7 +63,7 @@ extension on http.Response {
 Future<bool> verifyOtp(String dialCode, String phoneNumber, String otp) async {
   try {
     TwilioResponse response = await twilioFlutter.verifyCode(
-      // verificationServiceId: 'VA7a7ce8fb1464c6b77d3a6668adae518a',
+      // verificationServiceId:
       recipient: '$dialCode${phoneNumber.replaceAll(" ", "")}',
       code: otp,
     );
