@@ -6,10 +6,13 @@ import 'package:mindseye/submissionStatus.dart';
 
 class SchoolDashboardScreen extends StatefulWidget {
   final String data;
+  final String phone;
+  final String role = "Teacher"; // Added role
 
   const SchoolDashboardScreen({
     Key? key,
     required this.data,
+    required this.phone,
   }) : super(key: key);
 
   @override
@@ -17,6 +20,34 @@ class SchoolDashboardScreen extends StatefulWidget {
 }
 
 class _SchoolDashboardScreenState extends State<SchoolDashboardScreen> {
+  void _showLogoutDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirm Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              Navigator.pop(context); // Close dialog
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (context) => SchoolLoginScreen()),
+                (route) => false,
+              );
+            },
+            child: const Text('Logout', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -43,8 +74,8 @@ class _SchoolDashboardScreenState extends State<SchoolDashboardScreen> {
                       MaterialPageRoute(
                         builder: (context) => SelectChildScreen(
                           data: widget.data,
-                          phone: "", // Teacher does not use phone
-                          role: "Teacher", // Required role added
+                          phone: widget.phone, // Teacher does not use phone
+                          role: "Teacher",
                         ),
                       ),
                     );
@@ -95,14 +126,7 @@ class _SchoolDashboardScreenState extends State<SchoolDashboardScreen> {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => SchoolLoginScreen(),
-                      ),
-                    );
-                  },
+                  onPressed: _showLogoutDialog,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.black,
                     shape: RoundedRectangleBorder(
