@@ -1,16 +1,4 @@
-// Copyright 2024 Umang Patel
-// 
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-// 
-//     https://www.apache.org/licenses/LICENSE-2.0
-// 
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+
 
 import {Professional} from '../models/professional.model.js';
 import {School} from '../models/school.model.js';
@@ -242,59 +230,67 @@ const uploadchilddetails = async (req, res) => {
 };
 
 
-const getSubmissions = async (req, res) => {
-    try {
-      const { phone, role, childId } = req.query;
-  
-      if (!role) {
-        return res.status(400).json({ message: "Role is required" });
-      }
-  
-      let children = [];
-  
-      // Determine children based on role
-      if (role === "Parent") {
-        if (!phone) {
-          return res.status(400).json({ message: "Phone number is required for parents" });
-        }
-  
-        // Get children linked to parent phone
-        children = await Child.find({ parentPhoneNumber: phone });
-      } else if (role === "Teacher") {
-        // Teachers see all children
-        children = await Child.find();
-      } else {
-        return res.status(400).json({ message: "Invalid role" });
-      }
-  
-      const childIds = children.map(child => child._id.toString());
-  
-      // Filter logic
-      let filter = {};
-      if (childId) {
-        // If specific childId is requested, override other filters
-        filter.childId = childId;
-      } else {
-        filter.childId = { $in: childIds };
-      }
-  
-      // Get submissions and populate child details
-      const submissions = await Submission.find(filter).populate('childId');
-  
-      const formatted = submissions.map(sub => ({
-        id: sub._id,
-        childName: sub.childId?.name || 'Unknown',
-        imageUrl: sub.imageUrl,
-        answers: sub.answers,
-        submittedAt: sub.submittedAt
-      }));
-  
-      res.status(200).json(formatted);
-    } catch (error) {
-      console.error("Error fetching submissions:", error);
-      res.status(500).json({ message: "Error fetching submissions" });
+
+
+// Fetch reports for a specific user
+const getsubmissions= async (req, res) => {
+  try {
+    const { role, phone } = req.query;
+
+    if (!role || !phone) {
+      return res.status(400).json({ error: "Role and phone are required." });
     }
-  };
+
+    let query = { "submittedBy.role": role, "submittedBy.phone": phone };
+
+    if (role === "Parent") {
+      // For parents, fetch only reports for children registered with their phone number
+      query.childsName = { $exists: true }; // Assuming the child's name is stored in `childsName`
+    }
+
+    const reports = await Report.find(query)
+      .select("childsName age submittedAt")
+      .sort({ submittedAt: -1 }); // Sort by latest submissions
+
+    const formattedReports = reports.map((report) => ({
+      childName: report.childsName,
+      age: report.age,
+      submittedAt: report.submittedAt.toISOString(),
+    }));
+
+    return res.status(200).json(formattedReports);
+  } catch (error) {
+    console.error("Error fetching submissions:", error);
+    return res.status(500).json({ error: "An error occurred while fetching submissions." });
+  }
+};
+
+// Fetch all student submissions for teachers
+const getallstudentsubmissions=  async (req, res) => {
+  try {
+    const { role, phone } = req.query;
+
+    if (role !== "Teacher") {
+      return res.status(403).json({ error: "Unauthorized access." });
+    }
+
+    const reports = await Report.find()
+      .select("childsName age submittedAt submittedBy.phone")
+      .sort({ submittedAt: -1 });
+
+    const formattedReports = reports.map((report) => ({
+      childName: report.childsName,
+      age: report.age,
+      submittedAt: report.submittedAt.toISOString(),
+      submittedByPhone: report.submittedBy.phone,
+    }));
+
+    return res.status(200).json(formattedReports);
+  } catch (error) {
+    console.error("Error fetching all student submissions:", error);
+    return res.status(500).json({ error: "An error occurred while fetching submissions." });
+  }
+};
 
 //const getchilddetails = async (req, res) => {
   //  try {
@@ -338,46 +334,133 @@ const getchilddetails = async (req, res) => {
 
 
 const storeReportData = async (req, res) => {
+  try {
+    console.log("Request Body:", req.body); // Log incoming request data
+
     const data = req.body;
-    console.log(data);
+
+    // Extract submittedBy object
+    const submittedBy = data.submittedBy;
+    if (submittedBy.id && !submittedBy.phone) {
+      submittedBy.phone = submittedBy.id;
+    }
+    
+    if (!submittedBy || !submittedBy.role || !submittedBy.phone) {
+      console.error("User information is missing or invalid.");
+      return res.status(400).json({ error: "User information is missing or invalid." });
+    }
+
+    console.log("Submitted By:", submittedBy); // Log submittedBy object
+
+    // Parse nested objects (houseAns, personAns, treeAns)
+    let houseAns, personAns, treeAns;
     try {
-        const clinicsName = "";
-        const childsName = "";
-        const age = null
-        const optionalNotes = "";
-        const flagforlabel = "";
-        const labelling = "";
-        const imageurl = data.imageurl;
-        const WhoLivesHere = data.WhoLivesHere;
-        const ArethereHappy = data.ArethereHappy;
-        const DoPeopleVisitHere = data.DoPeopleVisitHere;
-        const Whatelsepeoplewant = data.Whatelsepeoplewant;
-        const Whoisthisperson = data.Whoisthisperson;
-        const Howoldarethey = data.Howoldarethey;
-        const Whatsthierfavthing = data.Whatsthierfavthing;
-        const Whattheydontlike = data.Whattheydontlike;
-        const Whatkindoftree = data.Whatkindoftree;
-        const howoldisit = data.howoldisit;
-        const whatseasonisit = data.whatseasonisit;
-        const anyonetriedtocut = data.anyonetriedtocut;
-        const whatelsegrows = data.whatelsegrows;
-        const whowaters = data.whowaters;
-        const doesitgetenoughsunshine = data.doesitgetenoughsunshine;
-        const houseAns = { WhoLivesHere, ArethereHappy, DoPeopleVisitHere, Whatelsepeoplewant };
-        const personAns = { Whoisthisperson, Howoldarethey, Whatsthierfavthing, Whattheydontlike };
-        const treeAns = { Whatkindoftree, howoldisit, whatseasonisit, anyonetriedtocut, whatelsegrows, whowaters, doesitgetenoughsunshine };
-        console.log(houseAns);
-        console.log(personAns);
-        console.log(treeAns);
-        const report = new Report({ clinicsName, childsName, age, optionalNotes, flagforlabel, labelling, imageurl, houseAns, personAns, treeAns });
-        await report.save();
+      houseAns = typeof data.houseAns === 'string' ? JSON.parse(data.houseAns) : data.houseAns;
+      personAns = typeof data.personAns === 'string' ? JSON.parse(data.personAns) : data.personAns;
+      treeAns = typeof data.treeAns === 'string' ? JSON.parse(data.treeAns) : data.treeAns;
+    } catch (error) {
+      console.error("Error parsing nested objects:", error);
+      return res.status(400).json({ error: "Invalid format for nested objects (houseAns, personAns, treeAns)." });
     }
-    catch (error) {
-        console.log(error);
-        res.status(500).json({ message: "Error Storing Report Data" });
+
+    console.log("House Answers:", houseAns); // Log grouped answers
+    console.log("Person Answers:", personAns);
+    console.log("Tree Answers:", treeAns);
+
+    // Validate required fields in nested objects
+    const requiredFields = [
+      "WhoLivesHere",
+      "ArethereHappy",
+      "DoPeopleVisitHere",
+      "Whatelsepeoplewant",
+      "Whoisthisperson",
+      "Howoldarethey",
+      "Whatsthierfavthing",
+      "Whattheydontlike",
+      "Whatkindoftree",
+      "howoldisit",
+      "whatseasonisit",
+      "anyonetriedtocut",
+      "whatelsegrows",
+      "whowaters",
+      "doesitgetenoughsunshine",
+    ];
+
+    const missingFields = requiredFields.filter(
+      (field) => !(houseAns[field] || personAns[field] || treeAns[field])
+    );
+    if (missingFields.length > 0) {
+      console.error("Missing Fields:", missingFields);
+      return res.status(400).json({
+        error: "The following fields are missing:",
+        missingFields,
+      });
     }
-    res.status(200).json({ message: "Report Data Stored" });
-}
+
+    // Extract role-specific fields
+    let clinicsName = "";
+    let childsName = "";
+    let age = null;
+    let optionalNotes = "";
+    let flagforlabel = false; // Default to false
+    let labelling = "";
+
+    // Populate role-specific fields only for Professionals
+    if (submittedBy.role === "Professional") {
+      clinicsName = data.clinicsName || "";
+      childsName = data.childsName || "";
+      age = data.age || null;
+      optionalNotes = data.optionalNotes || "";
+      flagforlabel = data.flagforlabel === "true" ? true : false; // Convert to Boolean
+      labelling = data.labelling || "";
+    }
+
+    // Create the report object
+    const report = new Report({
+      clinicsName,
+      childsName,
+      age,
+      optionalNotes,
+      flagforlabel,
+      labelling,
+      imageurl: data.imageurl || "",
+      houseAns,
+      personAns,
+      treeAns,
+      submittedBy, // Include the submittedBy object
+    });
+
+    console.log("Report Object:", report); // Log the report object
+
+    // Save the report
+    await report.save();
+    console.log("Report Saved Successfully"); // Log successful save
+
+    // Respond with success
+    return res.status(201).json({
+      message: "Report submitted successfully.",
+      report,
+    });
+  } catch (error) {
+    console.error("Error storing report data:", error); // Log the error
+
+    // Handle validation errors explicitly
+    if (error.name === "ValidationError") {
+      const validationErrors = Object.values(error.errors).map((err) => err.message);
+      return res.status(400).json({
+        error: "Validation failed.",
+        details: validationErrors,
+      });
+    }
+
+    // Ensure only one response is sent
+    if (!res.headersSent) {
+      return res.status(500).json({
+        error: "An error occurred while processing the report.",
+      });
+    }
+  }
+};
 
   const searchNumber = async (req, res) => {
     console.log("📢 Request received at /api/users/search-number");
@@ -415,16 +498,16 @@ const storeReportData = async (req, res) => {
             }
             return res.status(200).json(parent);
 
-        } else if (usertype == "School Admin") {
-            const schoolAdmin = await SchoolAdmin.findOne({ number: number });
-            if (!schoolAdmin) {
-                return res.status(500).json({ message: "School Admin Not Found" });
-            }
-            return res.status(200).json(schoolAdmin);
-
-        } else {
-            return res.status(400).json({ message: "Invalid usertype" });
-        }
+        } else if (usertype == "School Admin" || usertype == "Admin") {
+          const admin = await schoolAdmin.findOne({ number: number });
+          if (!admin) {
+              return res.status(500).json({ message: "School Admin Not Found" });
+          }
+          return res.status(200).json(admin);
+      }
+       else {
+          return res.status(400).json({ message: "Invalid usertype" });
+      }
 
     } catch (error) {
         console.error(error);
@@ -446,7 +529,8 @@ export { createProfessionalAccount,
     getAllTeachers,
     getchilddetails,
     uploadchilddetails,
-    getSubmissions,
+    getsubmissions,
+    getallstudentsubmissions,
     searchNumber,
     getSchoolAdmins, createSchoolAdmin,
 
