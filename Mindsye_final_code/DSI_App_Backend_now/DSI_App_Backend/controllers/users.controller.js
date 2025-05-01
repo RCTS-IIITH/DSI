@@ -1,4 +1,16 @@
-
+// Copyright 2024 Umang Patel
+// 
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// 
+//     https://www.apache.org/licenses/LICENSE-2.0
+// 
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 import {Professional} from '../models/professional.model.js';
 import {School} from '../models/school.model.js';
@@ -6,9 +18,8 @@ import {ngoAdmin} from '../models/ngo.model.js';
 import {Report} from '../models/report.model.js';
 import {Teacher} from '../models/teacher.model.js';
 import {Child} from '../models/child.model.js';
-import { schoolAdmin } from '../models/schoolAdmin.js';
-import mongoose from 'mongoose';
-import Submission from "../models/submissionmodel.js"; 
+
+
 
 const responder = (req, res) => {
     res.status(200).json({ message: "Hello World" });
@@ -32,212 +43,42 @@ const createProfessionalAccount = async (req, res) => {
     res.status(200).json({ message: "Professional Account Created" });
 }
 
-
-// Get all assigned schools for a professional
-const getAssignedSchoolsForProfessional = async (req, res) => {
-  const { phoneNumber } = req.query;
-
-  if (!phoneNumber) {
-    return res.status(400).json({ success: false, error: "Phone number is required" });
-  }
-
-  try {
-    const professional = await Professional.findOne({ Number: phoneNumber });
-
-    if (!professional) {
-      return res.status(404).json({ success: false, error: "Professional not found" });
-    }
-
-    // ✅ Query schools where professional._id is in School.assignedProfessionals
-    const assignedSchools = await School.find(
-      { assignedProfessionals: professional._id },
-      { schoolName: 1 }
-    );
-
-    if (!assignedSchools || assignedSchools.length === 0) {
-      return res.status(200).json({
-        success: true,
-        data: [],
-        message: "No schools assigned to this professional",
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      data: assignedSchools.map(s => s.schoolName),
-      message: "Assigned schools fetched successfully",
-    });
-
-  } catch (error) {
-    console.error(`Error fetching assigned schools: ${error.message}`);
-    res.status(500).json({ success: false, error: "Server error" });
-  }
-};
-
-
-// Assign a school to a professional (and vice versa)
-const assignSchoolToProfessional = async (req, res) => {
-  const { professionalId, schoolName } = req.body;
-
-  // Validate inputs
-  if (!professionalId || !schoolName) {
-    return res.status(400).json({
-      success: false,
-      error: "Both 'professionalId' and 'schoolName' are required.",
-    });
-  }
-
-  try {
-    // 1. Find professional by ProfessionalID (string like "96")
-    const professional = await Professional.findOne({ ProfessionalID: professionalId });
-    if (!professional) {
-      return res.status(404).json({
-        success: false,
-        error: "Professional not found",
-      });
-    }
-
-    // 2. Find school by schoolName
-    const school = await School.findOne({ schoolName: schoolName });
-    if (!school) {
-      return res.status(404).json({
-        success: false,
-        error: "School not found",
-      });
-    }
-
-    // 3. Prevent duplicate assignments
-    const alreadyInProfessional = professional.assignedSchools.includes(schoolName);
-    const alreadyInSchool = school.assignedProfessionals.some(
-      (id) => id.toString() === professional._id.toString()
-    );
-
-    if (alreadyInProfessional && alreadyInSchool) {
-      return res.status(200).json({
-        success: true,
-        message: "School is already assigned to this professional.",
-      });
-    }
-
-    // 4. Update both collections
-    if (!alreadyInProfessional) {
-      await Professional.updateOne(
-        { ProfessionalID: professionalId },
-        { $addToSet: { assignedSchools: schoolName } }
-      );
-    }
-
-    if (!alreadyInSchool) {
-      await School.updateOne(
-        { schoolName: schoolName },
-        { $addToSet: { assignedProfessionals: professional._id } }
-      );
-    }
-
-    // ✅ Success response
-    res.status(200).json({
-      success: true,
-      message: "School assigned to professional successfully",
-    });
-
-  } catch (error) {
-    console.error(`Error assigning school: ${error.message}`, {
-      stack: error.stack,
-      body: req.body,
-    });
-
-    // 🛑 Server error
-    res.status(500).json({
-      success: false,
-      error: "Failed to assign school to professional",
-    });
-  }
-};
 const getProfessionalIds = async (req, res) => {
-  try {
-    const professionals = await Professional.find({}, { 
-      name: 1, 
-      Number: 1, 
-      ProfessionalID: 1, // ✅ Include ProfessionalID
-      assignedSchools: 1 
-    });
-    const formattedProfessionals = professionals.map(p => ({
-      name: p.name,
-      Number: p.Number || 'N/A',
-      ProfessionalID: p.ProfessionalID || 'N/A', // ✅ Add default for safety
-      assignedSchools: p.assignedSchools || [],
-    }));
-    res.status(200).json(formattedProfessionals);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error Fetching Professional IDs" });
-  }
-};
+    try {
+        // const professionals = await Professional.find({}, { ProfessionalID: 1 } 
+        // get all fields
+        // const data = await Professional.find({});
+        // get name and ProfessionalID fields
+        const data = await Professional.find({}, { name: 1, ProfessionalID: 1 });
+        console.log(data);
+        res.status(200).json(data);
+    }
+    catch (error) {
+        console.log(error);
+        res.status(500).json({ message: "Error Fetching Professional Ids" });
+    }
+}
 
 const createSchoolAccount = async (req, res) => {
-  const data = req.body;
-
-  try {
-    const { schoolName, udiseNumber, address, assignedProfessionalId } = data;
-
-    // 1. Create the school
-    const school = new School({
-      schoolName,
-      UDISE: udiseNumber,
-      address,
-    });
-    
-    // 2. Find the professional using ProfessionalID
-    const professional = await Professional.findOne({ ProfessionalID: assignedProfessionalId });
-
-    if (professional) {
-      // 3. Save the professional's MongoDB ObjectId to the school
-      school.assignedProfessional = professional._id; // ✅ Use ObjectId, not ProfessionalID
+    const data = req.body;
+    console.log(data);
+    try {
+        const schoolName = data.schoolName;
+        const UDISE = data.udiseNumber;
+        const address = data.address;
+        const assignedProfessional = data.assignedProfessionalId;
+        // const school = new School({ name, Number, Address });
+        const school = new School({ schoolName, UDISE, address, assignedProfessional });
+        await school.save();
     }
-
-    await school.save();
-
-    // 4. Update the professional's assignedSchools array (optional, if needed)
-    if (professional && !professional.assignedSchools.includes(schoolName)) {
-      professional.assignedSchools.push(schoolName);
-      await professional.save();
+    catch (error) {
+        console.log(error);
+        res.status(500).json({ message: "Error Creating School Account" });
     }
-
     res.status(200).json({ message: "School Account Created" });
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({ message: "Error Creating School Account" });
-  }
-};
+}
 
-const getSchoolAdmins = async (req, res) => {
-    try {
-      const data = await schoolAdmin.find({});
-      console.log(data);
-      res.status(200).json(data);
-    } catch (error) {
-      console.log(error);
-      res.status(500).json({ message: 'Error Fetching School Admins' });
-    }
-  };
-  
-  const createSchoolAdmin = async (req, res) => {
-    try {
-      const { name, number } = req.body;
-  
-      if (!name || !number) {
-        return res.status(400).json({ message: 'Name and number are required' });
-      }
-  
-      const newAdmin = await schoolAdmin.create({ name, number });
-      console.log(newAdmin);
-      res.status(201).json(newAdmin);
-    } catch (error) {
-      console.log(error);
-      res.status(500).json({ message: 'Error Creating School Admin' });
-    }
-  };
-  
+
 const createNgoAdminAccount = async (req, res) => {
     const data = req.body;
     console.log(data);
@@ -300,397 +141,169 @@ const getSchools = async (req, res) => {
     }
 }
 
-
 const uploadteacherdetails = async (req, res) => {  
+    const data = req.body;
+    console.log(data);
+
+    // now store this data in mongodb
     try {
-        const data = req.body;
-        console.log(data);
-
-        // Find the school by name
-        const school = await School.findOne({ schoolName: data.school });
-
-        if (!school) {
-            return res.status(400).json({ message: "School not found" });
-        }
-
-        // Create a new teacher with the correct fields
+        const name = data.name;
+        const classs = data.class;
+        const Number = data.phone;
+        const school = data.school;
         const teacher = new Teacher({
-            name: data.name,
-            class: parseInt(data.class), // schema expects Number
-            phone: data.phone,
-            school_name: school.schoolName  // ✅ Correct key and value
+            name: name,
+            class: classs,
+            Number: Number,
+            school: school,
         });
-        
-
         await teacher.save();
-
-        // Add the teacher's ID to the school's teachers array
-        school.teachers = school.teachers || []; // Ensure it's an array
-        school.teachers.push(teacher._id);
-        await school.save();
-
-        res.status(200).json({ message: "Teacher Account Created", teacher });
-
-    } catch (error) {
-        console.error(error);
+    }
+    catch (error) {
+        console.log(error);
         res.status(500).json({ message: "Error Creating Teacher Account" });
     }
-};
-const getAllTeachers = async (req, res) => {
-    try {
-        const teachers = await Teacher.find(); // Fetch all teachers
-        res.status(200).json(teachers);
-    } catch (error) {
-        res.status(500).json({ message: "Error fetching teachers", error });
-    }
-};
+
+
+    // //  now add teachers number into the school
+    // // find the school first
+    const school = await School.findOne({schoolName: data.school});
+    console.log(school);
+
+    // add the teacher number to the school
+    school.teachers.push(data.phone);
+
+    await school.save();
+    res.status(200).json({ message: "Teacher Account Created" });
+
+
+}
 
 const uploadchilddetails = async (req, res) => {
+    const data = req.body;
+    console.log(data);
+
+
+    // save this in mongodb
     try {
-        const { name, rollNumber, schoolID, parentName, parentPhoneNumber, class: classNum, age } = req.body;
-
-        if (!name || !age) {
-            return res.status(400).json({ message: "Name and Age are required" });
-        }
-
+        const name = data.name;
+       const uid = data.uid;
+       const phone = data.phone;
+       const classs = data.class;
+       const school = data.school;
+       const dob = data.dob;
         const child = new Child({
-            name,
-            rollNumber,
-            schoolID,
-            parentName,
-            parentPhoneNumber,
-            class: classNum,
-            age
+            name: name,
+            childuid: uid,
+            parentphonenumber: phone,
+            class: classs,
+            school: school,
+            dateofbirth: dob
         });
-
         await child.save();
-        res.status(201).json({ message: "Child added successfully", child });
-
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: "Error adding child" });
     }
-};
-
-
-
-
-// Fetch reports for a specific user
-
-
-
-//const getchilddetails = async (req, res) => {
-  //  try {
-    //    const children = await Child.find();
-      //  res.status(200).json(children);
-    //} catch (error) {
-      //  console.error(error);
-       // res.status(500).json({ message: "Error fetching children" });
-  //  }
-//};
-const getchilddetails = async (req, res) => {
-    try {
-        const { phone, role } = req.query;
-
-        if (!role) {
-            return res.status(400).json({ message: "Role is required" });
-        }
-
-        let children = [];
-
-        if (role === "Parent") {
-            if (!phone) {
-                return res.status(400).json({ message: "Phone number is required for parents" });
-            }
-
-            // Fetch children where parent's phone number matches exactly
-            children = await Child.find({ parentPhoneNumber: phone });
-        } else if (role === "Teacher") {
-            // Fetch all children for teachers
-            children = await Child.find();
-        } else {
-            return res.status(400).json({ message: "Invalid role" });
-        }
-
-        res.status(200).json(children);
-    } catch (error) {
-        console.error("Error fetching children:", error);
-        res.status(500).json({ message: "Error fetching children" });
+    catch (error) {
+        console.log(error);
+        res.status(500).json({ message: "Error Creating Child Account" });
     }
-};
-
+    res.status(200).json({ message: "Child Account Created" });
+}
 
 const storeReportData = async (req, res) => {
-  try {
-    console.log("Request Body:", req.body); // Log incoming request data
-
     const data = req.body;
-
-    // Extract submittedBy object
-    const submittedBy = data.submittedBy;
-    if (submittedBy.id && !submittedBy.phone) {
-      submittedBy.phone = submittedBy.id;
-    }
-    
-    if (!submittedBy || !submittedBy.role || !submittedBy.phone) {
-      console.error("User information is missing or invalid.");
-      return res.status(400).json({ error: "User information is missing or invalid." });
-    }
-
-    console.log("Submitted By:", submittedBy); // Log submittedBy object
-
-    // Parse nested objects (houseAns, personAns, treeAns)
-    let houseAns, personAns, treeAns;
+    console.log(data);
     try {
-      houseAns = typeof data.houseAns === 'string' ? JSON.parse(data.houseAns) : data.houseAns;
-      personAns = typeof data.personAns === 'string' ? JSON.parse(data.personAns) : data.personAns;
-      treeAns = typeof data.treeAns === 'string' ? JSON.parse(data.treeAns) : data.treeAns;
-    } catch (error) {
-      console.error("Error parsing nested objects:", error);
-      return res.status(400).json({ error: "Invalid format for nested objects (houseAns, personAns, treeAns)." });
+        const clinicsName = data.clinicsName;
+        const childsName = data.childsName;
+        const age = data.age;
+        const optionalNotes = data.optionalNotes;
+        const flagforlabel = data.flagforlabel;
+        const labelling = data.labelling;
+        const imageurl = data.imageurl;
+        const WhoLivesHere = data.WhoLivesHere;
+        const ArethereHappy = data.ArethereHappy;
+        const DoPeopleVisitHere = data.DoPeopleVisitHere;
+        const Whatelsepeoplewant = data.Whatelsepeoplewant;
+        const Whoisthisperson = data.Whoisthisperson;
+        const Howoldarethey = data.Howoldarethey;
+        const Whatsthierfavthing = data.Whatsthierfavthing;
+        const Whattheydontlike = data.Whattheydontlike;
+        const Whatkindoftree = data.Whatkindoftree;
+        const howoldisit = data.howoldisit;
+        const whatseasonisit = data.whatseasonisit;
+        const anyonetriedtocut = data.anyonetriedtocut;
+        const whatelsegrows = data.whatelsegrows;
+        const whowaters = data.whowaters;
+        const doesitgetenoughsunshine = data.doesitgetenoughsunshine;
+        const houseAns = { WhoLivesHere, ArethereHappy, DoPeopleVisitHere, Whatelsepeoplewant };
+        const personAns = { Whoisthisperson, Howoldarethey, Whatsthierfavthing, Whattheydontlike };
+        const treeAns = { Whatkindoftree, howoldisit, whatseasonisit, anyonetriedtocut, whatelsegrows, whowaters, doesitgetenoughsunshine };
+        console.log(houseAns);
+        console.log(personAns);
+        console.log(treeAns);
+        const report = new Report({ clinicsName, childsName, age, optionalNotes, flagforlabel, labelling, imageurl, houseAns, personAns, treeAns });
+        await report.save();
     }
-
-    console.log("House Answers:", houseAns); // Log grouped answers
-    console.log("Person Answers:", personAns);
-    console.log("Tree Answers:", treeAns);
-
-    // Validate required fields in nested objects
-    const requiredFields = [
-      "WhoLivesHere",
-      "ArethereHappy",
-      "DoPeopleVisitHere",
-      "Whatelsepeoplewant",
-      "Whoisthisperson",
-      "Howoldarethey",
-      "Whatsthierfavthing",
-      "Whattheydontlike",
-      "Whatkindoftree",
-      "howoldisit",
-      "whatseasonisit",
-      "anyonetriedtocut",
-      "whatelsegrows",
-      "whowaters",
-      "doesitgetenoughsunshine",
-    ];
-
-    const missingFields = requiredFields.filter(
-      (field) => !(houseAns[field] || personAns[field] || treeAns[field])
-    );
-    if (missingFields.length > 0) {
-      console.error("Missing Fields:", missingFields);
-      return res.status(400).json({
-        error: "The following fields are missing:",
-        missingFields,
-      });
+    catch (error) {
+        console.log(error);
+        res.status(500).json({ message: "Error Storing Report Data" });
     }
+    res.status(200).json({ message: "Report Data Stored" });
+}
 
-    // Extract role-specific fields
-    let clinicsName = "";
-    let childsName = "";
-    let age = null;
-    let optionalNotes = "";
-    let flagforlabel = false; // Default to false
-    let labelling = "";
-
-    // Populate role-specific fields only for Professionals
-    if (submittedBy.role === "Professional") {
-      clinicsName = data.clinicsName || "";
-      childsName = data.childsName || "";
-      age = data.age || null;
-      optionalNotes = data.optionalNotes || "";
-      flagforlabel = typeof data.flagforlabel === "string"
-        ? data.flagforlabel.toLowerCase() === "true"
-        : !!data.flagforlabel; // Handle both string and Boolean inputs
-      labelling = data.labelling || "";
-    } else if (submittedBy.role === "Parent" || submittedBy.role === "Teacher") {
-      // Validate child data for Parent and Teacher
-      if (!data.childsName || !data.age) {
-        return res.status(400).json({
-          error: "Child name and age are required for Parent and Teacher roles.",
-        });
-      }
-      childsName = data.childsName;
-      age = data.age;
-    }
-
-    // Create the report object
-    const report = new Report({
-      clinicsName,
-      childsName,
-      age,
-      optionalNotes,
-      flagforlabel,
-      labelling,
-      imageurl: data.imageurl || "",
-      houseAns,
-      personAns,
-      treeAns,
-      submittedBy, // Include the submittedBy object
-    });
-
-    console.log("Report Object:", report); // Log the report object
-
-    // Save the report
-    await report.save();
-    console.log("Report Saved Successfully"); // Log successful save
-
-    // Respond with success
-    return res.status(201).json({
-      message: "Report submitted successfully.",
-      report,
-    });
-  } catch (error) {
-    console.error("Error storing report data:", error); // Log the error
-
-    // Handle validation errors explicitly
-    if (error.name === "ValidationError") {
-      const validationErrors = Object.values(error.errors).map((err) => err.message);
-      return res.status(400).json({
-        error: "Validation failed.",
-        details: validationErrors,
-      });
-    }
-
-    // Ensure only one response is sent
-    if (!res.headersSent) {
-      return res.status(500).json({
-        error: "An error occurred while processing the report.",
-      });
-    }
-  }
-};
-
-const getsubmissionsummary = async (req, res) => {  
-  try {
-    const { role, phone } = req.query;
-
-    if (!role) {
-      return res.status(400).json({ error: "Role is required" });
-    }
-
-    let query = {};
-    if (role === "Parent") {
-      if (!phone) {
-        return res.status(400).json({ error: "Phone number is required for parents" });
-      }
-      query = { "submittedBy.phone": phone };
-    }
-
-    // Aggregate submissions by child name
-    const summary = await Report.aggregate([
-      { $match: query },
-      {
-        $group: {
-          _id: "$childsName",
-          submissionCount: { $sum: 1 },
-        },
-      },
-      {
-        $project: {
-          childsName: "$_id",
-          submissionCount: 1,
-          _id: 0,
-        },
-      },
-    ]);
-
-    res.status(200).json(summary);
-  } catch (error) {
-    console.error("Error fetching submission summary:", error);
-    res.status(500).json({ error: "Error fetching submission summary" });
-  }
-};
-
-// Endpoint 2: Fetch Submissions by Child Name
-const getSubmissionsByChild = async (req, res) => {
-
-  try {
-    const { role, phone, childsName } = req.query;
-
-    if (!role || !childsName) {
-      return res.status(400).json({ error: "Role and child name are required" });
-    }
-
-    let query = { childsName };
-    if (role === "Parent") {
-      if (!phone) {
-        return res.status(400).json({ error: "Phone number is required for parents" });
-      }
-      query["submittedBy.phone"] = phone;
-    }
-
-    // Fetch submissions for the specific child
-    const submissions = await Report.find(query, {
-      childsName: 1,
-      age: 1,
-      submittedAt: 1,
-      houseAns: 1,
-      personAns: 1,
-      treeAns: 1,
-    }).sort({ submittedAt: -1 });
-
-    res.status(200).json(submissions);
-  } catch (error) {
-    console.error("Error fetching submissions by child:", error);
-    res.status(500).json({ error: "Error fetching submissions by child" });
-  }
-};
-
-
-
-  const searchNumber = async (req, res) => {
-    console.log("📢 Request received at /api/users/search-number");
+const searchNumber = async (req, res) => {
+    console.log("hello");
+    // return res.status(200).json({ message: "Hello World" });
     const data = req.body;
-
+    // console.log(data);
     try {
         const usertype = data.usertype;
         const number = data.number;
-
-        if (usertype == "NGO Master") {
-            const admin = await ngoAdmin.findOne({ number: number });
-            if (!admin) {
-                return res.status(500).json({ message: "NGO Admin Not Found" });
+        if(usertype=="NGO Master"){
+            const admin = await ngoAdmin.findOne({number: number});
+            console.log("hhshs ",admin);
+            if(admin==null){
+                console.log("Erroasdasdasda");
+                res.status(500).json({ message: "Error Fetching User" });
+                return;
             }
-            return res.status(200).json(admin);
-
-        } else if (usertype == "Teacher") {
-            const teacher = await Teacher.findOne({ phone: number });
-            if (!teacher) {
-                return res.status(500).json({ message: "Teacher Not Found" });
+            console.log(admin);
+            res.status(200).json(admin);        
+        }else if(usertype=="Teacher"){
+            const school = await Teacher.findOne({Number: number});
+            if(school==null){
+                res.status(500).json({ message: "Error Fetching User" });
+                return;
             }
-            return res.status(200).json(teacher);
-
-        } else if (usertype == "Professional") {
-            const professional = await Professional.findOne({ Number: number });
-            if (!professional) {
-                return res.status(500).json({ message: "Professional Not Found" });
+            console.log(school);
+            res.status(200).json(school);
+        }else if(usertype=="Professional"){
+            const professional = await Professional.findOne({Number: number});
+            if(professional==null){
+                res.status(500).json({ message: "Error Fetching User" });
+                return;
             }
-            return res.status(200).json(professional);
-
-        } else if (usertype == "Parent") {
-            const parent = await Child.findOne({ parentPhoneNumber: number });
-            if (!parent) {
-                return res.status(500).json({ message: "Parent Not Found" });
+            console.log(professional);
+            res.status(200).json(professional);
+        }else if(usertype=="Parent"){
+            const parent=await Child.findOne({parentPhoneNumber: number});
+            if(parent==null){
+                res.status(500).json({ message: "Error Fetching User" });
+                return;
             }
-            return res.status(200).json(parent);
+            console.log(parent);
+            res.status(200).json(parent);
+        }else{
+            res.status(500).json({ message: "Error Fetching User" });
+        }
 
-        } else if (usertype == "School Admin" || usertype == "Admin") {
-          const admin = await schoolAdmin.findOne({ number: number });
-          if (!admin) {
-              return res.status(500).json({ message: "School Admin Not Found" });
-          }
-          return res.status(200).json(admin);
-      }
-       else {
-          return res.status(400).json({ message: "Invalid usertype" });
-      }
-
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: "Error Fetching User" });
+        // const data = await Professional
     }
-};
-
+    catch (error) {
+        console.log(error);
+        res.status(500).json({ message: "Error Fetching Professional Ids" });
+    }
+}
 
 export default responder;
 export { createProfessionalAccount,
@@ -702,14 +315,6 @@ export { createProfessionalAccount,
     getSchools,
     storeReportData,
     uploadteacherdetails,
-    getAllTeachers,
-    getchilddetails,
     uploadchilddetails,
-    getSubmissionsByChild,
-    getsubmissionsummary ,
-    getAssignedSchoolsForProfessional,
-    assignSchoolToProfessional,
-    searchNumber,
-    getSchoolAdmins, createSchoolAdmin,
-
+    searchNumber
 };
