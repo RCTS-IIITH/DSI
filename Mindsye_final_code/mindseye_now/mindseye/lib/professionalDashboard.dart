@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:mindseye/captureDrawing.dart';
 import 'package:mindseye/labelPreviousData.dart';
 import 'package:mindseye/login.dart';
-import 'package:mindseye/professionalLogin.dart';
 import 'package:mindseye/reportsDashboard.dart';
 import 'package:mindseye/schoolScreen.dart';
 import 'package:mindseye/tagImageManuaaly.dart';
+import 'package:mindseye/shared_prefs_helper.dart';
 
 class ProfessionalDashboard extends StatefulWidget {
   final String data;
@@ -14,29 +13,129 @@ class ProfessionalDashboard extends StatefulWidget {
     Key? key,
     required this.data,
   }) : super(key: key);
+
   @override
   _ProfessionalDashboardState createState() => _ProfessionalDashboardState();
 }
 
 class _ProfessionalDashboardState extends State<ProfessionalDashboard> {
+  Map<String, String> userDetails = {'role': 'Guest', 'phoneNumber': 'N/A'};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserDetails();
+  }
+
+  Future<void> _loadUserDetails() async {
+    final details = await SharedPrefsHelper.getUserDetails();
+    setState(() {
+      userDetails = details;
+    });
+  }
+
+  void _logout() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirm Logout'),
+        content: const Text('Are you sure you want to log out?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await SharedPrefsHelper.clearUserDetails();
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => LoginScreen()),
+                (route) => false,
+              );
+            },
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.blue, // Professional dark black
+        title: Text(
+          'Professional Dashboard',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        elevation: 0,
+      ),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SizedBox(height: 16),
-              Text(
-                'Professional Dashboard',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
+
+              // 🧾 User Info Card
+              Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withOpacity(0.1),
+                      blurRadius: 6,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.person, color: Colors.black),
+                        SizedBox(width: 8),
+                        Text(
+                          'Role: ${userDetails['role']}',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Icon(Icons.phone, color: Colors.black),
+                        SizedBox(width: 8),
+                        Text(
+                          'Phone: ${userDetails['phoneNumber']}',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
+
               SizedBox(height: 32),
+
               _buildButton('Report Dashboard'),
               SizedBox(height: 16),
               _buildButton("Capture Child's Drawing"),
@@ -110,7 +209,6 @@ class _ProfessionalDashboardState extends State<ProfessionalDashboard> {
       height: 50,
       child: ElevatedButton(
         onPressed: () {
-          // Add button-specific action here
           if (text == 'Report Dashboard') {
             Navigator.push(
               context,
@@ -126,7 +224,6 @@ class _ProfessionalDashboardState extends State<ProfessionalDashboard> {
               ),
             );
           } else if (text == 'Label Previous Data') {
-            // Add action for Label Previous Data
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -134,7 +231,6 @@ class _ProfessionalDashboardState extends State<ProfessionalDashboard> {
               ),
             );
           } else if (text == 'School Analysis') {
-            // Add action for School Analysis
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -142,13 +238,7 @@ class _ProfessionalDashboardState extends State<ProfessionalDashboard> {
               ),
             );
           } else if (text == 'Logout') {
-            // Add action for Logout
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => LoginScreen(),
-              ),
-            );
+            _logout();
           }
         },
         style: ElevatedButton.styleFrom(
