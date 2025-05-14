@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:mindseye/captureDrawing.dart';
+import 'package:mindseye/shared_prefs_helper.dart';
 
 class SelectChildScreen extends StatefulWidget {
   final String data;
@@ -31,6 +33,9 @@ class _SelectChildScreenState extends State<SelectChildScreen>
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
 
+  TextEditingController searchController = TextEditingController();
+  Timer? _debounce;
+
   @override
   void initState() {
     super.initState();
@@ -40,15 +45,24 @@ class _SelectChildScreenState extends State<SelectChildScreen>
       vsync: this,
       duration: const Duration(milliseconds: 700),
     );
-
     _fadeAnimation = CurvedAnimation(
       parent: _controller,
       curve: Curves.easeInOut,
     );
+
+    // Debounce logic
+    searchController.addListener(() {
+      if (_debounce?.isActive ?? false) _debounce?.cancel();
+      _debounce = Timer(const Duration(milliseconds: 500), () {
+        filterChildren(searchController.text);
+      });
+    });
   }
 
   @override
   void dispose() {
+    searchController.dispose();
+    _debounce?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -61,7 +75,6 @@ class _SelectChildScreenState extends State<SelectChildScreen>
 
     try {
       final response = await http.get(Uri.parse(url));
-
       if (response.statusCode == 200) {
         final data =
             List<Map<String, dynamic>>.from(json.decode(response.body));
@@ -101,21 +114,52 @@ class _SelectChildScreenState extends State<SelectChildScreen>
   void filterByClass(String selected) {
     setState(() {
       selectedClass = selected;
-      filterChildren(searchQuery);
+      filterChildren(searchController.text);
     });
   }
 
-  void navigateToCaptureScreen(Map<String, dynamic> child) {
+  void navigateToCaptureScreen(Map<String, dynamic> child) async {
+    final String childId = child['_id'];
+    final String childName = child['name'];
+    final String childAge = child['age'].toString();
+
+    // Save selected child details before navigation
+    final bool saved = await SharedPrefsHelper.saveSelectedChildDetails(
+      id: childId,
+      name: childName,
+      age: childAge,
+    );
+
+    // Print for debugging
+    print('Selected child: $childName');
+
+    if (!saved) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Error saving child details'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Verify the saved details
+    final storedDetails = await SharedPrefsHelper.getSelectedChildDetails();
+    print('Stored child details: ${json.encode(storedDetails)}');
+
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => CaptureDrawingScreen(
-          data: widget.data,
-          clinicName: '',
-          childName: child['name'],
-          age: child['age'].toString(),
-          notes: '',
-          labeledScore: '',
+        builder: (context) => Hero(
+          tag: 'child_$childId',
+          child: CaptureDrawingScreen(
+            data: widget.data,
+            clinicName: '',
+            childName: childName,
+            age: childAge,
+            notes: '',
+            labeledScore: '',
+          ),
         ),
       ),
     );
@@ -153,7 +197,7 @@ class _SelectChildScreenState extends State<SelectChildScreen>
         child: ListTile(
           contentPadding: const EdgeInsets.all(16),
           title: Text(
-            "👧 ${child['name']}",
+            " ${child['name']}",
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
           ),
           subtitle:
@@ -173,8 +217,8 @@ class _SelectChildScreenState extends State<SelectChildScreen>
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: DataTable(
-          columnSpacing: 20,
-          headingRowColor: WidgetStateProperty.all(Colors.grey.shade200),
+          columnSpacing: 100,
+          headingRowColor: MaterialStateProperty.all(Colors.grey.shade200),
           headingTextStyle: const TextStyle(
               fontWeight: FontWeight.bold, color: Colors.black87, fontSize: 16),
           dataTextStyle: const TextStyle(fontSize: 15),
@@ -196,7 +240,7 @@ class _SelectChildScreenState extends State<SelectChildScreen>
                   ElevatedButton(
                     onPressed: () => navigateToCaptureScreen(child),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.black,
+                      backgroundColor: Colors.deepPurple,
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 8),
                       shape: RoundedRectangleBorder(
@@ -220,7 +264,6 @@ class _SelectChildScreenState extends State<SelectChildScreen>
     final isParent = widget.role == "Parent";
 
     return Scaffold(
-      backgroundColor: isParent ? const Color(0xFFFFF8F0) : Colors.white,
       appBar: AppBar(
         title:
             Text(isParent ? "🧒 Select Your Child" : "👨‍🏫 Select a Student"),
@@ -239,10 +282,19 @@ class _SelectChildScreenState extends State<SelectChildScreen>
                   : Column(
                       children: [
                         TextField(
-                          onChanged: filterChildren,
+                          controller: searchController,
                           decoration: InputDecoration(
                             hintText: "Search by name or class",
                             prefixIcon: const Icon(Icons.search),
+                            suffixIcon: searchController.text.isNotEmpty
+                                ? IconButton(
+                                    onPressed: () {
+                                      searchController.clear();
+                                      filterChildren("");
+                                    },
+                                    icon: const Icon(Icons.clear),
+                                  )
+                                : null,
                             filled: true,
                             fillColor: Colors.white,
                             border: OutlineInputBorder(
