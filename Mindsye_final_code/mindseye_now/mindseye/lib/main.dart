@@ -58,8 +58,8 @@ class _MyAppState extends State<MyApp> {
       valueListenable: themeNotifier,
       builder: (_, ThemeMode currentMode, __) {
         return MaterialApp(
-          initialRoute: 'login',
           debugShowCheckedModeBanner: false,
+          initialRoute: 'login',
           routes: {
             'login': (context) => LoginScreen(),
             'schoolLogin': (context) => SchoolLoginScreen(),
@@ -113,8 +113,12 @@ class _MyAppState extends State<MyApp> {
                   data: '',
                   phone: '',
                 ),
-            'uploadChildDetails': (context) => UploadChildDetails(),
-            'uploadTeacherDetails': (context) => UploadTeacherDetails(),
+            'uploadChildDetails': (context) => UploadChildDetails(
+                  role: '',
+                ),
+            'uploadTeacherDetails': (context) => UploadTeacherDetails(
+                  role: '',
+                ),
             'adminDashboard': (context) => AdminDashboard(
                   data: '',
                 ),
@@ -128,7 +132,7 @@ class _MyAppState extends State<MyApp> {
                   schoolName: '',
                 ),
             'CreateAdminAccount': (context) => CreateAdminAccountScreen(),
-            'assignAdminToSchool': (context) => AssignAdminToSchoolScreen(),
+            'assignAdminToSchool': (context) => AssignSchoolToAdminScreen(),
             'childReportDetails': (context) => ChildReport(data: ''),
           },
           theme: ThemeData.light(),
