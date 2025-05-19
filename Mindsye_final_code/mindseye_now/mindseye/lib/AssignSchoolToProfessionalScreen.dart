@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+import 'package:mindseye/NGOdashboard.dart';
+import 'package:mindseye/shared_prefs_helper.dart'; // Ensure this path is correct
 
 class AssignSchoolToProfessionalScreen extends StatefulWidget {
   const AssignSchoolToProfessionalScreen({super.key});
@@ -20,17 +22,13 @@ class _AssignSchoolToProfessionalScreenState
   String? selectedProfessional;
   String? selectedSchoolToAssign;
   String backendUrl = dotenv.env['BACKEND_URL'] ?? '';
+  List<String> displaySchools = [];
+  Map<String, String> professionalIdMap = {}; // Map name -> ProfessionalID
+  Map<String, Map<String, String>> professionalData = {};
+  bool _isLoading = false;
 
   List<String> professionals = [];
   List<String> schools = [];
-  List<String> displaySchools = [];
-
-  Map<String, Map<String, String>> professionalData = {};
-
-  // ✅ Add this line
-  Map<String, String> professionalIdMap = {};
-
-  bool _isLoading = false;
 
   Future<void> _fetchInitialData() async {
     if (backendUrl.isEmpty) {
@@ -47,21 +45,17 @@ class _AssignSchoolToProfessionalScreenState
       final schoolRes = await http.get(schoolUri);
 
       if (professionalRes.statusCode == 200 && schoolRes.statusCode == 200) {
-        final List<dynamic> professionalList =
-            json.decode(professionalRes.body);
-        final List<dynamic> schoolList = json.decode(schoolRes.body);
+        final List<dynamic> professionalList = jsonDecode(professionalRes.body);
+        final List<dynamic> schoolList = jsonDecode(schoolRes.body);
 
         setState(() {
-          // ❌ Remove: Map<String, String> professionalIdMap = {};
-          // ✅ Use class-level map instead
-          professionalIdMap.clear(); // Reset before populating
-
+          professionalIdMap.clear();
           professionals = professionalList
               .where((p) => p['name'] != null && p['ProfessionalID'] != null)
               .map((p) {
             String name = p['name'].toString();
             String id = p['ProfessionalID'].toString();
-            professionalIdMap[name] = id; // Store ID against name
+            professionalIdMap[name] = id;
             return name;
           }).toList();
 
@@ -69,26 +63,27 @@ class _AssignSchoolToProfessionalScreenState
               .where((s) => s['schoolName'] != null)
               .map((s) => s['schoolName'].toString())
               .toList();
+
+          // Build professional data map
+          professionalData.clear();
+          for (var p in professionalList) {
+            var name = p['name']?.toString() ?? 'Unknown Professional';
+            var number = p['Number']?.toString() ?? 'N/A';
+            List assignedSchools = p['assignedSchools'] ?? [];
+            String assignedSchoolsStr =
+                assignedSchools.map((s) => s.toString()).join(', ');
+            professionalData[name] = {
+              'phone': number,
+              'assignedSchools': assignedSchoolsStr,
+            };
+          }
         });
 
-        // Build map of professional data
-        professionalData.clear();
-        for (var p in professionalList) {
-          var name = p['name']?.toString() ?? 'Unknown Professional';
-          var number = p['Number']?.toString() ?? 'N/A';
-
-          List assignedSchools = p['assignedSchools'] ?? [];
-          String assignedSchoolsStr =
-              assignedSchools.map((s) => s.toString()).join(', ');
-
-          professionalData[name] = {
-            'phone': number,
-            'assignedSchools': assignedSchoolsStr,
-          };
+        if (professionals.isNotEmpty) {
+          _onProfessionalSelected(professionals.first);
         }
       } else {
-        _showSnackBar(
-            "Failed to load data: ${professionalRes.statusCode}, ${schoolRes.statusCode}");
+        _showSnackBar("Failed to load data.");
       }
     } catch (e) {
       _showSnackBar("Network Error: $e");
@@ -98,9 +93,9 @@ class _AssignSchoolToProfessionalScreenState
   void _onProfessionalSelected(String? value) {
     if (value == null || !professionalData.containsKey(value)) return;
 
-    final phone = professionalData[value]!['phone'] ?? 'N/A';
-    final schoolsAssigned = professionalData[value]!['assignedSchools'] ?? "";
-
+    final data = professionalData[value]!;
+    final phone = data['phone'] ?? 'N/A';
+    final schoolsAssigned = data['assignedSchools'] ?? "";
     List<String> assignedList = schoolsAssigned
         .split(',')
         .map((s) => s.trim())
@@ -108,14 +103,13 @@ class _AssignSchoolToProfessionalScreenState
         .toList();
 
     setState(() {
+      selectedProfessional = value;
       _phoneController.text = phone;
       _assignedSchoolsController.text = schoolsAssigned;
-
       displaySchools =
           schools.where((school) => !assignedList.contains(school)).toList();
-
-      selectedSchoolToAssign = null;
-      selectedProfessional = value;
+      selectedSchoolToAssign =
+          displaySchools.isNotEmpty ? null : selectedSchoolToAssign;
     });
   }
 
@@ -129,35 +123,43 @@ class _AssignSchoolToProfessionalScreenState
 
     try {
       final professionalId = professionalIdMap[selectedProfessional!]!;
-
       final response = await http.post(
         Uri.parse('$backendUrl/api/users/assign-school-to-professional'),
-        body: {
-          'professionalId': professionalId, // Use ID from class-level map
-          'schoolName': selectedSchoolToAssign!,
-        },
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'professionalId': professionalId,
+          'schoolName': selectedSchoolToAssign,
+        }),
       );
 
       if (response.statusCode == 200) {
-        _showSnackBar("Assignment successful!");
+        final responseData = jsonDecode(response.body);
+        if (responseData['success'] == true) {
+          _showSnackBar("School assigned successfully!");
 
-        // Update locally
-        final currentSchools = _assignedSchoolsController.text;
-        final updated = currentSchools.isEmpty
-            ? selectedSchoolToAssign!
-            : '$currentSchools, ${selectedSchoolToAssign!}';
-
-        _assignedSchoolsController.text = updated;
-
-        setState(() {
-          displaySchools.remove(selectedSchoolToAssign);
-          selectedSchoolToAssign = null;
-        });
+          // ✅ Redirect to NGO Dashboard with fade transition
+          Navigator.pushReplacement(
+            context,
+            PageRouteBuilder(
+              pageBuilder: (_, __, ___) =>
+                  NGODashboard(data: selectedProfessional!),
+              transitionsBuilder: (_, animation, __, child) {
+                return FadeTransition(opacity: animation, child: child);
+              },
+            ),
+          );
+        } else {
+          _showSnackBar(responseData['message'] ?? "Assignment failed.");
+        }
+      } else if (response.statusCode == 404) {
+        final error = jsonDecode(response.body);
+        _showSnackBar(error['message'] ?? "Not found");
       } else {
-        _showSnackBar("Server returned status ${response.statusCode}");
+        final error = jsonDecode(response.body);
+        _showSnackBar(error['message'] ?? "Failed to assign school");
       }
     } catch (e) {
-      _showSnackBar("Could not connect to server: $e");
+      _showSnackBar("Network error: $e");
     } finally {
       setState(() => _isLoading = false);
     }
@@ -202,17 +204,43 @@ class _AssignSchoolToProfessionalScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Assign School To Professional')),
+      appBar: AppBar(
+        title: const Text("Assign School to Professional"),
+        backgroundColor: Colors.blue, // Consistent with NGO Dashboard
+        leading: IconButton(
+            icon: Icon(Icons.arrow_back),
+            onPressed: () async {
+              final currentUserDetails =
+                  await SharedPrefsHelper.getUserDetails();
+              final currentAdminPhone =
+                  currentUserDetails['phoneNumber'] ?? 'Unknown';
+
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => NGODashboard(data: currentAdminPhone)),
+                (route) => false,
+              );
+            }),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.refresh),
+            onPressed: _fetchInitialData, // Refresh data
+          )
+        ],
+      ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: ListView(
             children: [
-              const Text('Select Professional', style: TextStyle(fontSize: 16)),
-              const SizedBox(height: 6),
+              const Text(
+                "Select Professional",
+                style: TextStyle(fontSize: 16),
+              ),
+              const SizedBox(height: 8),
               DropdownButtonFormField<String>(
                 value: selectedProfessional,
-                decoration: _inputDecoration("Select Professional *"),
                 items: professionals.map((p) {
                   return DropdownMenuItem<String>(
                     value: p,
@@ -220,6 +248,7 @@ class _AssignSchoolToProfessionalScreenState
                   );
                 }).toList(),
                 onChanged: _onProfessionalSelected,
+                decoration: _inputDecoration("Select Professional *"),
                 validator: (value) =>
                     value == null ? "Please select a professional" : null,
               ),
@@ -237,12 +266,16 @@ class _AssignSchoolToProfessionalScreenState
                 decoration: _inputDecoration("Assigned Schools"),
               ),
               const SizedBox(height: 16),
-              const Text('Select School to Assign',
-                  style: TextStyle(fontSize: 16)),
-              const SizedBox(height: 6),
+              const Text(
+                "Select School to Assign",
+                style: TextStyle(fontSize: 16),
+              ),
+              const SizedBox(height: 8),
               if (displaySchools.isEmpty)
-                const Text("No available schools to assign",
-                    style: TextStyle(color: Colors.grey)),
+                const Text(
+                  "No available schools to assign.",
+                  style: TextStyle(color: Colors.grey),
+                ),
               if (displaySchools.isNotEmpty)
                 DropdownButtonFormField<String>(
                   value: selectedSchoolToAssign,
