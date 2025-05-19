@@ -63,140 +63,150 @@ class _ProfessionalDashboardState extends State<ProfessionalDashboard> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.blue, // Professional dark black
-        title: Text(
-          'Professional Dashboard',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
+    return WillPopScope(
+      onWillPop: () async => false, // 🔒 Disable system back button
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: Colors.blue,
+          title: Text(
+            'Professional Dashboard',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
           ),
+          elevation: 0,
+          automaticallyImplyLeading: false, // 🚫 Hide back arrow
+          actions: [
+            IconButton(
+              icon: Icon(Icons.logout),
+              onPressed: () => _logout(),
+            ),
+          ],
         ),
-        elevation: 0,
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(height: 16),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(height: 16),
 
-              // 🧾 User Info Card
-              Container(
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.grey.withOpacity(0.1),
-                      blurRadius: 6,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.person, color: Colors.black),
-                        SizedBox(width: 8),
-                        Text(
-                          'Role: ${userDetails['role']}',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.black,
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Icon(Icons.phone, color: Colors.black),
-                        SizedBox(width: 8),
-                        Text(
-                          'Phone: ${userDetails['phoneNumber']}',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.black,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              SizedBox(height: 32),
-
-              _buildButton('Report Dashboard'),
-              SizedBox(height: 16),
-              _buildButton("Capture Child's Drawing"),
-              SizedBox(height: 16),
-              _buildButton('Label Previous Data'),
-              SizedBox(height: 16),
-              _buildButton('School Analysis'),
-              SizedBox(height: 16),
-              _buildButton('Logout'),
-              SizedBox(height: 24),
-              Text(
-                '5 images submitted today',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[700],
-                ),
-              ),
-              SizedBox(height: 32),
-              Text(
-                'Notifications',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(height: 16),
-              _buildNotification(
-                'Report ready for School A',
-                'Updated on: 10/01/2023',
-              ),
-              SizedBox(height: 16),
-              _buildNotification(
-                'School B Uploaded the pictures',
-                'Updated on: 10/01/2023',
-              ),
-              SizedBox(height: 24),
-              Center(
-                child: SizedBox(
-                  width: 300,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      // Add action for marking all as read
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.black,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                // 🧾 User Info Card
+                Container(
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.1),
+                        blurRadius: 6,
+                        offset: Offset(0, 2),
                       ),
-                    ),
-                    child: Text(
-                      'Mark All as Read',
-                      style: TextStyle(
-                        fontSize: 18,
-                        color: Colors.white,
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.person, color: Colors.black),
+                          SizedBox(width: 8),
+                          Text(
+                            'Role: ${userDetails['role']}',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.black,
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Icon(Icons.phone, color: Colors.black),
+                          SizedBox(width: 8),
+                          Text(
+                            'Phone: ${userDetails['phoneNumber']}',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.black,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                SizedBox(height: 32),
+
+                _buildButton('Report Dashboard'),
+                SizedBox(height: 16),
+                _buildButton("Capture Child's Drawing"),
+                SizedBox(height: 16),
+                _buildButton('Label Previous Data'),
+                SizedBox(height: 16),
+                _buildButton('School Analysis'),
+                SizedBox(height: 16),
+                _buildButton('Logout'),
+                SizedBox(height: 24),
+                Text(
+                  '5 images submitted today',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[700],
+                  ),
+                ),
+                SizedBox(height: 32),
+                Text(
+                  'Notifications',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: 16),
+                _buildNotification(
+                  'Report ready for School A',
+                  'Updated on: 10/01/2023',
+                ),
+                SizedBox(height: 16),
+                _buildNotification(
+                  'School B Uploaded the pictures',
+                  'Updated on: 10/01/2023',
+                ),
+                SizedBox(height: 24),
+                Center(
+                  child: SizedBox(
+                    width: 300,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        // Add action for marking all as read
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.black,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        'Mark All as Read',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
