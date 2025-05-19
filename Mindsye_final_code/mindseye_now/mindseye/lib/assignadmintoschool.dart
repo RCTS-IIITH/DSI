@@ -134,248 +134,351 @@
 // }
 
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-// ignore: depend_on_referenced_packages
 import 'package:http/http.dart' as http;
+import 'package:mindseye/NGOdashboard.dart';
+import 'package:mindseye/shared_prefs_helper.dart';
 
-class AssignAdminToSchoolScreen extends StatefulWidget {
-  const AssignAdminToSchoolScreen({super.key});
+class AssignSchoolToAdminScreen extends StatefulWidget {
+  const AssignSchoolToAdminScreen({super.key});
 
   @override
-  // ignore: library_private_types_in_public_api
-  _AssignAdminToSchoolScreenState createState() =>
-      _AssignAdminToSchoolScreenState();
+  State<AssignSchoolToAdminScreen> createState() =>
+      _AssignSchoolToAdminScreenState();
 }
 
-class _AssignAdminToSchoolScreenState extends State<AssignAdminToSchoolScreen> {
-  // Controllers for autofill fields
+class _AssignSchoolToAdminScreenState extends State<AssignSchoolToAdminScreen> {
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _assignedSchoolsController =
       TextEditingController();
 
-  // Variables for dropdown selection
   String? selectedAdmin;
   String? selectedSchoolToAssign;
-  String backendUrl = dotenv.env['BACKEND_URL']!;
-  // Example data for dropdowns
+
+  String backendUrl = dotenv.env['BACKEND_URL'] ?? '';
+
+  List<String> displaySchools = [];
+  Map<String, String> adminIdMap = {}; // Map name -> Number
+  Map<String, Map<String, String>> adminData = {};
+
+  bool _isLoading = false;
 
   List<String> admins = [];
   List<String> schools = [];
-  List<String> dispalyschools = [];
 
-  // create a dictionary to store the admin name and phone number and assigned schools
-  Map<String, Map<String, String>> adminData = {};
+  Future<void> _fetchInitialData() async {
+    if (backendUrl.isEmpty) {
+      _showSnackBar("Backend URL not configured.");
+      return;
+    }
 
-  Future<void> MyinitState() async {
     final adminUri = Uri.parse('$backendUrl/api/users/get-admins');
     final schoolUri = Uri.parse('$backendUrl/api/users/get-schools');
 
-    // Fetch data from the server
-    await http.get(adminUri).then((response) {
-      final List<dynamic> data = json.decode(response.body);
-      for (var admin in data) {
-        setState(() {
-          admins.add(admin['name']);
-        });
-      }
+    try {
+      final adminRes = await http.get(adminUri);
+      final schoolRes = await http.get(schoolUri);
 
-      // Store admin data in a dictionary
-      for (var admin in data) {
+      if (adminRes.statusCode == 200 && schoolRes.statusCode == 200) {
+        final List<dynamic> adminList = jsonDecode(adminRes.body);
+        final List<dynamic> schoolList = jsonDecode(schoolRes.body);
+
         setState(() {
-          adminData[admin['name']] = {
-            'phone': admin['number'],
-            'assignedSchools': admin['assignedSchoolList'].join(', '),
-          };
+          adminIdMap.clear();
+
+          admins = adminList
+              .where((p) => p['name'] != null && p['number'] != null)
+              .map((p) {
+            String name = p['name'].toString();
+            String number = p['number'].toString();
+            adminIdMap[name] = number;
+            return name;
+          }).toList();
+
+          schools = schoolList
+              .where((s) => s['schoolName'] != null)
+              .map((s) => s['schoolName'].toString())
+              .toList();
+
+          // Build admin data map
+          adminData.clear();
+          for (var p in adminList) {
+            var name = p['name']?.toString() ?? 'Unknown Admin';
+            var number = p['number']?.toString() ?? 'N/A';
+            List assignedSchools = p['assignedSchools'] ?? [];
+            String assignedSchoolsStr =
+                assignedSchools.map((s) => s.toString()).join(', ');
+            adminData[name] = {
+              'phone': number,
+              'assignedSchools': assignedSchoolsStr,
+            };
+          }
         });
+
+        if (admins.isNotEmpty) {
+          _onAdminSelected(admins.first);
+        }
+      } else {
+        _showSnackBar("Failed to load data.");
       }
+    } catch (e) {
+      _showSnackBar("Network Error: $e");
+    }
+  }
+
+  void _onAdminSelected(String? value) {
+    if (value == null || !adminData.containsKey(value)) return;
+    final data = adminData[value]!;
+    final phone = data['phone'] ?? 'N/A';
+    final schoolsAssigned =
+        data['assignedSchools'] ?? ""; // Get assigned schools
+    List<String> assignedList = schoolsAssigned
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+
+    setState(() {
+      selectedAdmin = value;
+      _phoneController.text = phone;
+      _assignedSchoolsController.text = schoolsAssigned;
+      displaySchools =
+          schools.where((school) => !assignedList.contains(school)).toList();
+      selectedSchoolToAssign =
+          displaySchools.isNotEmpty ? null : selectedSchoolToAssign;
     });
+  }
 
-    await http.get(schoolUri).then((response) {
-      final List<dynamic> data = json.decode(response.body);
-      for (var school in data) {
-        setState(() {
-          schools.add(school['schoolName']);
-        });
+  Future<void> _assignSchoolToAdmin() async {
+    if (selectedAdmin == null || selectedSchoolToAssign == null) {
+      _showSnackBar("Please select both an admin and a school.");
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final adminNumber = adminIdMap[selectedAdmin!]!;
+
+      final response = await http.post(
+        Uri.parse('$backendUrl/api/users/assign-school-to-admin'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'adminNumber': adminNumber,
+          'schoolName': selectedSchoolToAssign,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        if (responseData['success'] == true) {
+          _showSnackBar("School assigned successfully!");
+
+          // ✅ Redirect to NGODashboard using original NGO Admin phone
+          final currentUserDetails = await SharedPrefsHelper.getUserDetails();
+          final currentAdminPhone =
+              currentUserDetails['phoneNumber'] ?? 'Unknown';
+
+          Navigator.pushReplacement(
+            context,
+            PageRouteBuilder(
+              pageBuilder: (_, __, ___) =>
+                  NGODashboard(data: currentAdminPhone),
+              transitionsBuilder: (_, animation, __, child) {
+                return FadeTransition(opacity: animation, child: child);
+              },
+            ),
+          );
+        } else {
+          _showSnackBar(responseData['message'] ?? "Assignment failed.");
+        }
+      } else if (response.statusCode == 404) {
+        final error = jsonDecode(response.body);
+        _showSnackBar(error['message'] ?? "Not found");
+      } else {
+        final error = jsonDecode(response.body);
+        _showSnackBar(error['message'] ?? "Failed to assign school");
       }
-    });
+    } catch (e) {
+      _showSnackBar("Network error: $e");
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 
-  @override
-  void initState() {
-    super.initState();
-    MyinitState();
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(message),
+      behavior: SnackBarBehavior.floating,
+    ));
   }
 
-  @override
-  void dispose() {
-    // Dispose of controllers when no longer needed
-    _phoneController.dispose();
-    _assignedSchoolsController.dispose();
-    super.dispose();
-  }
-
-  void _showDialog(String title, String content, [bool popOnSuccess = false]) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(content),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              if (popOnSuccess) {
-                Navigator.pop(context);
-              }
-            },
-            child: const Text("OK"),
-          ),
-        ],
+  InputDecoration _inputDecoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      filled: true,
+      fillColor: Colors.grey[200],
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide.none,
       ),
     );
   }
 
   @override
+  void initState() {
+    super.initState();
+    _fetchInitialData();
+  }
+
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    _assignedSchoolsController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Assign Admin To School'),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Select Admin (Dropdown)',
-              style: TextStyle(fontSize: 16),
-            ),
-            DropdownButton<String>(
-              value: selectedAdmin,
-              isExpanded: true,
-              items: admins.map((admin) {
-                return DropdownMenuItem<String>(
-                  value: admin,
-                  child: Text(admin),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() {
-                  selectedAdmin = value;
+    return WillPopScope(
+      onWillPop: () async {
+        final currentUserDetails = await SharedPrefsHelper.getUserDetails();
+        final currentAdminPhone =
+            currentUserDetails['phoneNumber'] ?? 'Unknown';
 
-                  // remove the schools that are already assigned to the admin
-                  List<String> assignedSchools =
-                      adminData[value]!['assignedSchools']!.split(', ');
-                  dispalyschools = schools
-                      .where((school) => !assignedSchools.contains(school))
-                      .toList();
-                  _phoneController.text = adminData[value]!['phone'] as String;
-                  _assignedSchoolsController.text =
-                      adminData[value]!['assignedSchools'] as String;
-                });
-              },
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Phone Number (autofill)',
-              style: TextStyle(fontSize: 16),
-            ),
-            TextField(
-              controller: _phoneController,
-              readOnly: true,
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: Colors.grey[200],
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Assigned Schools (autofill)',
-              style: TextStyle(fontSize: 16),
-            ),
-            TextField(
-              controller: _assignedSchoolsController,
-              readOnly: true,
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: Colors.grey[200],
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Select School to Assign',
-              style: TextStyle(fontSize: 16),
-            ),
-            DropdownButton<String>(
-              value: selectedSchoolToAssign,
-              isExpanded: true,
-              items: dispalyschools.map((school) {
-                return DropdownMenuItem<String>(
-                  value: school,
-                  child: Text(school),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() {
-                  selectedSchoolToAssign = value;
-                });
-              },
-            ),
-            const SizedBox(height: 32),
-            Center(
-              child: ElevatedButton(
-                onPressed: () async {
-                  if (selectedAdmin == null || selectedSchoolToAssign == null) {
-                    _showDialog(
-                        "Error", "Please select both an admin and a school.");
-                    return;
-                  }
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+              builder: (_) => NGODashboard(data: currentAdminPhone)),
+          (route) => false,
+        );
+        return false;
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text("Assign School to Admin"),
+          backgroundColor: Colors.blue,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back),
+            onPressed: () async {
+              final currentUserDetails =
+                  await SharedPrefsHelper.getUserDetails();
+              final currentAdminPhone =
+                  currentUserDetails['phoneNumber'] ?? 'Unknown';
 
-                  try {
-                    final response = await http.post(
-                      Uri.parse('$backendUrl/api/users/assign-admin-to-school'),
-                      body: {
-                        'adminName': selectedAdmin,
-                        'schoolName': selectedSchoolToAssign,
-                      },
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => NGODashboard(data: currentAdminPhone)),
+                (route) => false,
+              );
+            },
+          ),
+        ),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: ListView(
+              children: [
+                const Text(
+                  "Select Admin",
+                  style: TextStyle(fontSize: 16),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: selectedAdmin,
+                  items: admins.map((p) {
+                    return DropdownMenuItem<String>(
+                      value: p,
+                      child: Text(p),
                     );
-
-                    if (response.statusCode == 200) {
-                      _showDialog("Success",
-                          "Admin assigned to school successfully!", true);
-                    } else {
-                      _showDialog(
-                          "Error", "Failed to assign admin. Please try again.");
-                    }
-                  } catch (e) {
-                    _showDialog("Error",
-                        "Network error: Unable to connect to the server.");
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
-                  minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                  }).toList(),
+                  onChanged: _onAdminSelected,
+                  decoration: _inputDecoration("Select Admin *"),
+                  validator: (value) =>
+                      value == null ? "Please select an admin" : null,
+                ),
+                const SizedBox(height: 20),
+                TextFormField(
+                  controller: _phoneController,
+                  readOnly: true,
+                  decoration: _inputDecoration("Phone Number"),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _assignedSchoolsController,
+                  readOnly: true,
+                  maxLines: 2,
+                  decoration: _inputDecoration("Assigned Schools"),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  "Select School to Assign",
+                  style: TextStyle(fontSize: 16),
+                ),
+                const SizedBox(height: 8),
+                if (displaySchools.isEmpty)
+                  const Text(
+                    "No available schools to assign.",
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                if (displaySchools.isNotEmpty)
+                  DropdownButtonFormField<String>(
+                    value: selectedSchoolToAssign,
+                    hint: Text("Choose a school"),
+                    items: displaySchools.map((school) {
+                      return DropdownMenuItem<String>(
+                        value: school,
+                        child: Text(school),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        selectedSchoolToAssign = value;
+                      });
+                    },
+                    decoration: _inputDecoration("Select School *"),
+                    validator: (value) =>
+                        value == null ? "Please select a school" : null,
+                  ),
+                const SizedBox(height: 32),
+                ElevatedButton.icon(
+                  onPressed: (!_isLoading &&
+                          selectedAdmin != null &&
+                          selectedSchoolToAssign != null &&
+                          displaySchools.isNotEmpty)
+                      ? _assignSchoolToAdmin
+                      : null,
+                  icon: _isLoading
+                      ? SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                          ),
+                        )
+                      : Icon(Icons.hail),
+                  label: Text(
+                    _isLoading ? "Assigning..." : "Assign School",
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.black,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: EdgeInsets.symmetric(vertical: 16),
                   ),
                 ),
-                child: const Text(
-                  'Save Changes',
-                  style: TextStyle(color: Colors.white),
-                ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
