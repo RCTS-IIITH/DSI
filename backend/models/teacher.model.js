@@ -1,0 +1,27 @@
+
+
+import mongoose from 'mongoose';
+
+const TeacherSchema = new mongoose.Schema({
+    name: {
+        type: String,
+        required: true
+    },
+    class: {
+        type: Number,
+        required: true
+    },
+    phone: {
+        type: String,
+        required: true
+    },
+    school_name: {  // <-- changed from school_id to school_name
+        type: String,
+        required: true
+    }
+}, { timestamps: true });
+
+
+export const Teacher = mongoose.model('Teacher', TeacherSchema);
+
+
