@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mindseye/shared_prefs_helper.dart';
 
 class TagImageScreen extends StatefulWidget {
   const TagImageScreen({super.key});
@@ -12,6 +13,18 @@ class _TagImageScreenState extends State<TagImageScreen> {
   final _childIdController = TextEditingController();
   final _ageController = TextEditingController();
   final _notesController = TextEditingController();
+
+  String clinicName = '';
+
+  @override
+  void initState() {
+    super.initState();
+    SharedPrefsHelper.getUserDetails().then((details) {
+      setState(() {
+        clinicName = details['clinicName'] ?? '';
+      });
+    });
+  }
 
   @override
   void dispose() {
@@ -124,6 +137,7 @@ class _TagImageScreenState extends State<TagImageScreen> {
                   ),
                 ),
               ),
+              Text("Clinic Name: $clinicName", style: TextStyle(fontWeight: FontWeight.bold)),
             ],
           ),
         ),

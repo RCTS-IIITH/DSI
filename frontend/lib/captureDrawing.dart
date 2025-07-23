@@ -32,6 +32,17 @@ class CaptureDrawingScreen extends StatefulWidget {
 
 class _CaptureDrawingScreenState extends State<CaptureDrawingScreen> {
   File? _image;
+  String clinicName = '';
+
+  @override
+  void initState() {
+    super.initState();
+    SharedPrefsHelper.getUserDetails().then((details) {
+      setState(() {
+        clinicName = details['clinicName'] ?? '';
+      });
+    });
+  }
 
   // Function to pick an image
   Future<void> _pickImage(ImageSource source) async {
@@ -77,7 +88,7 @@ class _CaptureDrawingScreenState extends State<CaptureDrawingScreen> {
 
               // Conditionally display professional-specific fields
               if (widget.data == "Professional") ...[
-                Text('Clinic Name: ${widget.clinicName}'),
+                Text('Clinic Name: $clinicName'),
                 Text('Child Name: ${widget.childName}'),
                 Text('Age: ${widget.age}'),
                 Text('Notes: ${widget.notes}'),

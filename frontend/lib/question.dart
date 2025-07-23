@@ -159,17 +159,15 @@ class _QuestionsScreenState extends State<QuestionsScreen>
         return;
       }
 
-      // Prepare payload
+      final isProfessional = widget.data == "Professional";
+
       final data = {
-        'clinicsName': widget.data == "Professional" ? widget.clinicName : "",
+        'clinicName': widget.clinicName,
         'childsName': childsName,
         'age': childAge,
-        'optionalNotes': widget.data == "Professional" ? widget.notes : "",
+        'optionalNotes': isProfessional ? widget.notes : "",
         'flagforlabel': widget.labeledScore.isNotEmpty,
         'labelling': widget.labeledScore,
-
-        'schoolId': selectedChildDetails['schoolId'], // Add this
-        'schoolName': selectedChildDetails['schoolName'], // Add this
         'imageurl': widget.imageFile?.path ?? "",
         'houseAns': {
           'Who_Lives_Here': houseWhoLivesHereController.text,
@@ -196,6 +194,11 @@ class _QuestionsScreenState extends State<QuestionsScreen>
           'role': userDetails['role'],
           'phone': userDetails['phoneNumber']
         },
+        // Only include schoolId/schoolName for Parent/Teacher
+        if (!isProfessional) ...{
+          'schoolId': selectedChildDetails['schoolId'],
+          'schoolName': selectedChildDetails['schoolName'],
+        }
       };
 
       // Submit report

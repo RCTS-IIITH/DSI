@@ -12,11 +12,18 @@ class SharedPrefsKeys {
 
 class SharedPrefsHelper {
   // Save user details (role and phone number)
-  static Future<void> saveUserDetails(String role, String phoneNumber) async {
+  static Future<void> saveUserDetails(
+    String role,
+    String phoneNumber, {
+    String? name,
+    String? clinicName,
+  }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(SharedPrefsKeys.roleKey, role);
       await prefs.setString(SharedPrefsKeys.phoneNumberKey, phoneNumber);
+      if (name != null) await prefs.setString('name', name);
+      if (clinicName != null) await prefs.setString('clinicName', clinicName);
     } catch (e) {
       print("Error saving user details: $e");
     }
@@ -45,11 +52,13 @@ class SharedPrefsHelper {
       final assignedSchoolList =
           prefs.getStringList('assignedSchoolList') ?? [];
       final name = prefs.getString('name') ?? 'Unknown';
+      final clinicName = prefs.getString('clinicName') ?? '';
       return {
         'role': role,
         'phoneNumber': phoneNumber,
         'name': name,
         'assignedSchoolList': assignedSchoolList.join(', '),
+        'clinicName': clinicName,
       };
     } catch (e) {
       print("Error retrieving user details: $e");
