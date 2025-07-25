@@ -1,9 +1,11 @@
 import 'dart:io';
+import 'dart:convert'; // Added for jsonEncode
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mindseye/question.dart';
 // QuestionsScreen
 import 'package:mindseye/shared_prefs_helper.dart'; // SharedPrefsHelper
+import 'package:http/http.dart' as http; // Added for http.MultipartRequest
 
 class CaptureDrawingScreen extends StatefulWidget {
   final String clinicName; // Optional for non-professionals
@@ -68,6 +70,35 @@ class _CaptureDrawingScreenState extends State<CaptureDrawingScreen> {
           ],
         ),
       );
+    }
+  }
+
+  // Replace the report submission logic (where you navigate to QuestionsScreen or submit the report) with the following pattern:
+
+  Future<void> submitReportWithImage({
+    required File imageFile,
+    required Map<String, dynamic> reportFields,
+  }) async {
+    final backendUrl = 'http://localhost:3000/api/reports/store-report-data';
+    var request = http.MultipartRequest('POST', Uri.parse(backendUrl));
+
+    // Add all text fields
+    reportFields.forEach((key, value) {
+      if (value is Map || value is List) {
+        request.fields[key] = jsonEncode(value);
+      } else {
+        request.fields[key] = value.toString();
+      }
+    });
+
+    // Add the image file
+    request.files.add(await http.MultipartFile.fromPath('image', imageFile.path));
+
+    var response = await request.send();
+    if (response.statusCode == 201) {
+      print('Report submitted successfully!');
+    } else {
+      print('Failed to submit report: ${response.statusCode}');
     }
   }
 

@@ -3,6 +3,9 @@ import mongoose from 'mongoose';
 import {Professional} from '../models/professional.model.js'; 
 import {School} from '../models/school.model.js';
 import {User} from '../models/user.model.js'; // Import User model for NGO admin lookups
+import { Teacher } from '../models/teacher.model.js';
+import { Child } from '../models/child.model.js';
+
 const testing = (req, res) => {
     res.status(200).json({ message: "Hello World" });
 }
@@ -101,7 +104,23 @@ const getOneClinicReport = async (req, res) => {
         return res.status(404).json({ message: 'Report not found' });
       }
   
-      res.status(200).json(report);
+      // Enhancement: If manualScore and labeledBy, fetch professional info
+      let professionalInfo = null;
+      if (report.manualScore && report.labeledBy) {
+        professionalInfo = await Professional.findOne({ Number: report.labeledBy });
+        if (professionalInfo) {
+          professionalInfo = {
+            name: professionalInfo.name,
+            Number: professionalInfo.Number,
+          };
+        }
+      }
+
+      // Add professionalInfo to the response object
+      const reportObj = report.toObject();
+      reportObj.professionalInfo = professionalInfo;
+  
+      res.status(200).json(reportObj);
     } catch (error) {
       console.error(error);
       res.status(500).json({ message: 'Error fetching report' });
@@ -280,6 +299,33 @@ const getProfessionalSchoolSubmissions = async (req, res) => {
 };
 
 
+
+const getTeacherSubmissions = async (req, res) => {
+  const { teacherPhone } = req.query;
+  if (!teacherPhone) return res.status(400).json({ error: "teacherPhone required" });
+
+  // 1. Find teacher
+  const teacher = await Teacher.findOne({ phone: teacherPhone });
+  if (!teacher) return res.status(404).json({ error: "Teacher not found" });
+
+  // 2. Get assigned school and class
+  const schoolName = teacher.school_name;
+  const classNum = teacher.class;
+
+  // 2.1. Find the school by name to get its ObjectId
+  const school = await School.findOne({ schoolName: schoolName });
+  if (!school) return res.status(404).json({ error: "School not found" });
+
+  // 3. Find all children in that school and class
+  const children = await Child.find({ schoolID: school._id, class: classNum });
+  const childIds = children.map(child => child._id);
+
+  // 4. Find all reports for those children
+  const reports = await Report.find({ childId: { $in: childIds } });
+
+  res.json(reports);
+};
+
 export { testing,
     getReportDataClinic,
     getOneClinicReport,
@@ -287,5 +333,6 @@ export { testing,
     getParentSubmissions,
     getNgoSubmissions,
     getSchoolSubmissions,
-    getProfessionalSchoolSubmissions
+    getProfessionalSchoolSubmissions,
+    getTeacherSubmissions
  };

@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:mindseye/shared_prefs_helper.dart';
+import 'package:photo_view/photo_view.dart';
 
 class PreviousSubmissionsScreen extends StatefulWidget {
   final String data;
@@ -322,8 +323,40 @@ class _ChildSubmissionsScreenState extends State<ChildSubmissionsScreen>
                   title: Text('Age: ${submission['age'] ?? 'N/A'}'),
                 ),
                 ListTile(
-                  title: Text('Image URL: ${submission['imageurl'] ?? 'N/A'}'),
+                  title: Text('Image'),
+                  subtitle: Text(
+                    submission['imagePath'] != null && submission['imagePath'].isNotEmpty
+                        ? submission['imagePath']
+                        : 'N/A',
+                  ),
                 ),
+                if (submission['imagePath'] != null && submission['imagePath'].isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => FullscreenImageViewer(
+                              imageUrl: 'http://localhost:3000/' + submission['imagePath'],
+                              heroTag: submission['imagePath'], // Use a unique tag
+                            ),
+                          ),
+                        );
+                      },
+                      child: Hero(
+                        tag: submission['imagePath'],
+                        child: Image.network(
+                          'http://localhost:3000/' + submission['imagePath'],
+                          height: 120,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) =>
+                              Text('Image not found'),
+                        ),
+                      ),
+                    ),
+                  ),
                 buildStyledExpansionTile(
                   title: 'House Answers',
                   icon: Icons.house_rounded,
@@ -364,6 +397,39 @@ class _ChildSubmissionsScreenState extends State<ChildSubmissionsScreen>
                   itemCount: submissions.length,
                   itemBuilder: (context, index) => buildSubmissionCard(index),
                 ),
+    );
+  }
+}
+
+class FullscreenImageViewer extends StatelessWidget {
+  final String imageUrl;
+  final String heroTag;
+
+  const FullscreenImageViewer({
+    Key? key,
+    required this.imageUrl,
+    required this.heroTag,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: GestureDetector(
+        onTap: () => Navigator.pop(context),
+        child: Center(
+          child: Hero(
+            tag: heroTag,
+            child: PhotoView(
+              imageProvider: NetworkImage(imageUrl),
+              backgroundDecoration: const BoxDecoration(color: Colors.black),
+              minScale: PhotoViewComputedScale.contained,
+              maxScale: PhotoViewComputedScale.covered * 2,
+              loadingBuilder: (context, event) => const Center(child: CircularProgressIndicator()),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

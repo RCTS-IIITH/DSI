@@ -194,27 +194,42 @@ class _QuestionsScreenState extends State<QuestionsScreen>
           'role': userDetails['role'],
           'phone': userDetails['phoneNumber']
         },
-        // Only include schoolId/schoolName for Parent/Teacher
+        // Only include schoolId/schoolName and childId for Parent/Teacher
         if (!isProfessional) ...{
           'schoolId': selectedChildDetails['schoolId'],
           'schoolName': selectedChildDetails['schoolName'],
+          'childId': selectedChildDetails['id'] ?? selectedChildDetails['_id'],
         }
       };
 
-      // Submit report
+      // Replace the report submission logic in _validateAndSubmit with the following pattern:
       final String backendUrl = dotenv.env['BACKEND_URL']!;
-      final response = await http.post(
-        Uri.parse('$backendUrl/api/reports/store-report-data'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(data),
-      );
+      var request = http.MultipartRequest('POST', Uri.parse('$backendUrl/api/reports/store-report-data'));
 
-      print("Backend Response: ${response.body}");
+      // Add all text fields
+      data.forEach((key, value) {
+        if (value is Map || value is List) {
+          request.fields[key] = jsonEncode(value);
+        } else {
+          request.fields[key] = value.toString();
+        }
+      });
 
+      // Add the image file
+      if (widget.imageFile != null) {
+        request.files.add(await http.MultipartFile.fromPath('image', widget.imageFile!.path));
+      }
+
+      var response = await request.send();
+      if (response.statusCode == 201) {
+        print('Report submitted successfully!');
       // Navigate back after successful submission
       Navigator.pop(context);
       Navigator.pop(context);
       Navigator.pop(context);
+      } else {
+        print('Failed to submit report: ${response.statusCode}');
+      }
     } catch (e) {
       print("Error submitting report: $e");
       _showError("Submission Error",

@@ -80,6 +80,7 @@ class _MyAppState extends State<MyApp> {
             'labelPreviousData': (context) => LabelPreviousDataScreen(),
             'reportDetails': (context) => ReportDetailsScreen(
                   reportId: '',
+                  userRole: '',
                 ),
             'reportAnalysis': (context) => ReportAnalysisScreen(),
             'studentReport': (context) => StudentReportScreen(),

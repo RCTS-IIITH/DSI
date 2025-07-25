@@ -309,6 +309,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:mindseye/fullscreen_image_viewer.dart';
 import 'package:mindseye/shared_prefs_helper.dart';
 import 'dart:convert';
 
@@ -455,12 +456,15 @@ class _LabelPreviousDataScreenState extends State<LabelPreviousDataScreen> {
           ),
           margin: EdgeInsets.zero,
           child: InkWell(
-            onTap: () {
+            onTap: () async {
+              final userDetails = await SharedPrefsHelper.getUserDetails();
+              final role = userDetails['role'] ?? '';
               Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (context) => ReportDetailsScreen(
                     reportId: report['_id'],
+                    userRole: role,
                   ),
                 ),
               );
@@ -496,6 +500,38 @@ class _LabelPreviousDataScreenState extends State<LabelPreviousDataScreen> {
                     "Submitted At: $shortDate",
                     style: TextStyle(color: Colors.grey[700]),
                   ),
+                  // Display image if imagePath exists in buildReportCard
+                  // Display image with tap-to-zoom using Hero and FullscreenImageViewer
+                  if (report['imagePath'] != null &&
+                      report['imagePath'].isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => FullscreenImageViewer(
+                                imageUrl: 'http://localhost:3000/' +
+                                    report['imagePath'],
+                                heroTag: report['imagePath'], // unique tag
+                              ),
+                            ),
+                          );
+                        },
+                        child: Hero(
+                          tag: report['imagePath'],
+                          child: Image.network(
+                            'http://localhost:3000/' + report['imagePath'],
+                            height: 120,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                Text('Image not found'),
+                          ),
+                        ),
+                      ),
+                    ),
+
                   // Updated score display
                   Text(
                     manualScore != null

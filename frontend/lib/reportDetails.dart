@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:mindseye/fullscreen_image_viewer.dart';
 import 'dart:convert';
 
 import 'labelDataScreen.dart';
 
 class ReportDetailsScreen extends StatefulWidget {
   final String reportId;
+  final String userRole;
 
-  const ReportDetailsScreen({Key? key, required this.reportId})
-      : super(key: key);
+  const ReportDetailsScreen({
+    Key? key,
+    required this.reportId,
+    required this.userRole,
+  }) : super(key: key);
 
   @override
   _ReportDetailsScreenState createState() => _ReportDetailsScreenState();
@@ -157,7 +162,11 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
 
               final manualScore = reportData['manualScore'];
               final score = reportData['score'];
-              final displayScore = manualScore != null ? parseScore(manualScore) : parseScore(score);
+              final displayScore = manualScore != null
+                  ? parseScore(manualScore)
+                  : parseScore(score);
+
+              final professionalInfo = reportData['professionalInfo'];
 
               return SingleChildScrollView(
                 child: Column(
@@ -216,10 +225,21 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
                     // Show both scores if available
                     if (manualScore != null)
                       ProfileInfoRow(
-                          label: "Manual Score", value: "${parseScore(manualScore)}/100"),
+                          label: "Manual Score",
+                          value: "${parseScore(manualScore)}/100"),
+                    if (manualScore != null &&
+                        professionalInfo != null &&
+                        widget.userRole.toLowerCase() == 'teacher') ...[
+                      SizedBox(height: 8),
+                      Text(
+                        'Scored by: ${professionalInfo['name']} (${professionalInfo['Number']})',
+                        style: TextStyle(fontSize: 16, color: Colors.blueGrey[700]),
+                      ),
+                    ],
                     if (score != null)
                       ProfileInfoRow(
-                          label: "Model Score", value: "${parseScore(score)}/100"),
+                          label: "Model Score",
+                          value: "${parseScore(score)}/100"),
                     // Main Score (for progress bar and summary)
                     ProfileInfoRow(
                         label: "Score", value: "${displayScore}/100"),
@@ -235,6 +255,40 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
                     ),
 
                     SizedBox(height: 24),
+
+                    // Display image if imagePath exists
+                    // Display image with tap-to-zoom using Hero and FullscreenImageViewer
+                    if (reportData['imagePath'] != null &&
+                        reportData['imagePath'].isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        child: GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => FullscreenImageViewer(
+                                  imageUrl: 'http://localhost:3000/' +
+                                      reportData['imagePath'],
+                                  heroTag:
+                                      reportData['imagePath'], // unique tag
+                                ),
+                              ),
+                            );
+                          },
+                          child: Hero(
+                            tag: reportData['imagePath'],
+                            child: Image.network(
+                              'http://localhost:3000/' +
+                                  reportData['imagePath'],
+                              height: 180,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Text('Image not found'),
+                            ),
+                          ),
+                        ),
+                      ),
 
                     // 🏠 House Test
                     buildAnswerSection(
@@ -265,6 +319,9 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
 
                     // ✍️ Proceed to Manual Scoring Button
                     SizedBox(height: 20),
+                    // ✍️ Proceed to Manual Scoring Button (only for professionals)
+                    if (widget.userRole.toLowerCase() == 'professional') ...[
+                    SizedBox(height: 20),
                     ElevatedButton.icon(
                       onPressed: () {
                         Navigator.push(
@@ -292,6 +349,7 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
                         minimumSize: Size(double.infinity, 50),
                       ),
                     ),
+                    ]
                   ],
                 ),
               );

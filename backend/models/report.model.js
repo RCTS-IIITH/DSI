@@ -27,10 +27,15 @@ const ReportSchema = new mongoose.Schema({
     default: false,
   },
   labelling: String,
-  imageurl: String,
+  imagePath: { type: String }, // Store relative file path, e.g., 'uploads/12345-image.jpg'
   houseAns: Object,
   personAns: Object,
   treeAns: Object,
+  childId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Child',
+    required: false, // Only set for parent/teacher reports
+  },
   submittedBy: {
     role: { type: String, required: true },
     phone: { type: String, required: true },

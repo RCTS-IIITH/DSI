@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:mindseye/captureDrawing.dart';
 import 'package:mindseye/shared_prefs_helper.dart'; // Import SharedPreferences helper
+import 'dart:io'; // Import for File
+import 'dart:convert'; // Import for jsonEncode
+import 'package:http/http.dart' as http; // Import for http
 
 class TagImageManually extends StatefulWidget {
   final String data;
@@ -95,6 +98,34 @@ class _TagImageManuallyState extends State<TagImageManually> {
         ),
       ),
     );
+  }
+
+  // Add a function for submitting the form with image using MultipartRequest
+  Future<void> submitTagImageManualReport({
+    required File imageFile,
+    required Map<String, dynamic> reportFields,
+  }) async {
+    final backendUrl = 'http://localhost:3000/api/reports/store-report-data';
+    var request = http.MultipartRequest('POST', Uri.parse(backendUrl));
+
+    // Add all text fields
+    reportFields.forEach((key, value) {
+      if (value is Map || value is List) {
+        request.fields[key] = jsonEncode(value);
+      } else {
+        request.fields[key] = value.toString();
+      }
+    });
+
+    // Add the image file
+    request.files.add(await http.MultipartFile.fromPath('image', imageFile.path));
+
+    var response = await request.send();
+    if (response.statusCode == 201) {
+      print('Tag image manual report submitted successfully!');
+    } else {
+      print('Failed to submit tag image manual report: ${response.statusCode}');
+    }
   }
 
   @override

@@ -69,6 +69,9 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart';
+import 'package:mindseye/reportDetails.dart';
+import 'package:mindseye/shared_prefs_helper.dart';
+// Added import for ReportDetailsScreen
 
 class SubmissionStatusScreen extends StatefulWidget {
   const SubmissionStatusScreen({super.key});
@@ -110,13 +113,18 @@ class _SubmissionStatusScreenState extends State<SubmissionStatusScreen> {
     try {
       setState(() => isLoading = true);
 
-      final uri = Uri.parse('$backendUrl/api/reports/get-report-data-clinic');
-      final response = await http.get(uri);
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        setState(() {
-          submissions =
+      final userDetails = await SharedPrefsHelper.getUserDetails();
+      final role = userDetails['role'] ?? '';
+      final phone = userDetails['phoneNumber'] ?? '';
+      List<Map<String, dynamic>> fetchedSubmissions = [];
+      if (role == 'Teacher') {
+        // Fetch teacher-specific reports
+        final uri = Uri.parse(
+            '$backendUrl/api/reports/get-teacher-submissions?teacherPhone=$phone');
+        final response = await http.get(uri);
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          fetchedSubmissions =
               List<Map<String, dynamic>>.from(data.map((submission) => {
                     'id': submission['_id'],
                     'name': submission['childsName'] ?? 'N/A',
@@ -128,13 +136,36 @@ class _SubmissionStatusScreenState extends State<SubmissionStatusScreen> {
                     'labeledAt': submission['labeledAt'],
                     'flagforlabel': submission['flagforlabel'],
                   }));
-
+        } else {
+          throw Exception('Failed to load teacher submissions');
+        }
+      } else {
+        // Default: fetch all reports (e.g., for admin)
+      final uri = Uri.parse('$backendUrl/api/reports/get-report-data-clinic');
+      final response = await http.get(uri);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+          fetchedSubmissions =
+              List<Map<String, dynamic>>.from(data.map((submission) => {
+                    'id': submission['_id'],
+                    'name': submission['childsName'] ?? 'N/A',
+                    'status': _getSubmissionStatus(submission),
+                    'submittedAt': submission['submittedAt'],
+                    'modelScore': submission['score'],
+                    'manualScore': submission['manualScore'],
+                    'labeledBy': submission['labeledBy'],
+                    'labeledAt': submission['labeledAt'],
+                    'flagforlabel': submission['flagforlabel'],
+                  }));
+        } else {
+          throw Exception('Failed to load submissions');
+        }
+      }
+      setState(() {
+        submissions = fetchedSubmissions;
           _applyFiltersAndSorting();
           isLoading = false;
         });
-      } else {
-        throw Exception('Failed to load submissions');
-      }
     } catch (e) {
       setState(() {
         error = e.toString();
@@ -365,6 +396,23 @@ class _SubmissionStatusScreenState extends State<SubmissionStatusScreen> {
                               title: Text('Model Score'),
                               subtitle: Text(
                                 '${submission['modelScore']?.toString() ?? 'Processing...'}%',
+                              ),
+                              trailing: IconButton(
+                                icon: Icon(Icons.remove_red_eye,
+                                    color: Colors.blue),
+                                tooltip: 'View Full Report',
+                                onPressed: () async {
+                                  final userDetails = await SharedPrefsHelper.getUserDetails();
+                                  final role = userDetails['role'] ?? '';
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => ReportDetailsScreen(
+                                          reportId: submission['id'],
+                                          userRole: role),
+                                    ),
+                                  );
+                                },
                               ),
                             ),
                             if (submission['manualScore'] != null)

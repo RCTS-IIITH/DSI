@@ -739,8 +739,14 @@ const storeReportData = async (req, res) => {
 
     const data = req.body;
 
-    // Extract submittedBy object
-    const submittedBy = data.submittedBy;
+    // Parse submittedBy from JSON string
+    let submittedBy = {};
+    try {
+      submittedBy = data.submittedBy ? JSON.parse(data.submittedBy) : {};
+    } catch (e) {
+      return res.status(400).json({ error: "Invalid submittedBy format" });
+    }
+
     if (submittedBy.id && !submittedBy.phone) {
       submittedBy.phone = submittedBy.id;
     }
@@ -845,7 +851,7 @@ if (schoolId) {
       optionalNotes,
       flagforlabel,
       labelling,
-      imageurl: data.imageurl || "",
+      imagePath: req.file ? req.file.path : "", 
       houseAns,
       personAns,
       treeAns,
@@ -853,7 +859,8 @@ if (schoolId) {
         role: submittedBy.role,
         phone: submittedBy.phone,
        
-      } // Include the submittedBy object
+      },
+      childId: req.body.childId || null, // Set from frontend for parent/teacher, null for professional
     });
 
     console.log("Report Object:", report); // Log the report object

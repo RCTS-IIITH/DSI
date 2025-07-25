@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:mindseye/shared_prefs_helper.dart';
+import 'dart:convert'; // Added for jsonEncode
+import 'dart:io'; // Added for File
+import 'package:http/http.dart' as http; // Added for http.MultipartRequest
 
 class TagImageScreen extends StatefulWidget {
   const TagImageScreen({super.key});
@@ -40,6 +43,34 @@ class _TagImageScreenState extends State<TagImageScreen> {
       print("Child ID: ${_childIdController.text}");
       print("Age: ${_ageController.text}");
       print("Notes: ${_notesController.text}");
+    }
+  }
+
+  // Add a function for submitting the form with image using MultipartRequest
+  Future<void> submitTagImageReport({
+    required File imageFile,
+    required Map<String, dynamic> reportFields,
+  }) async {
+    final backendUrl = 'http://localhost:3000/api/reports/store-report-data';
+    var request = http.MultipartRequest('POST', Uri.parse(backendUrl));
+
+    // Add all text fields
+    reportFields.forEach((key, value) {
+      if (value is Map || value is List) {
+        request.fields[key] = jsonEncode(value);
+      } else {
+        request.fields[key] = value.toString();
+      }
+    });
+
+    // Add the image file
+    request.files.add(await http.MultipartFile.fromPath('image', imageFile.path));
+
+    var response = await request.send();
+    if (response.statusCode == 201) {
+      print('Tag image report submitted successfully!');
+    } else {
+      print('Failed to submit tag image report: ${response.statusCode}');
     }
   }
 
