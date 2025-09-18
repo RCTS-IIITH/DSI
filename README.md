@@ -1,7 +1,5 @@
 # updates
 
-https://github.com/Paaaaak/mern-project-mapping
 
-
-
-edit profile _ changes made 
+INTEGRATED_ORG
+UPDATED EDIT PROFILE FEATURES AND MADE CHANGES TO BACKEND AUTH 
