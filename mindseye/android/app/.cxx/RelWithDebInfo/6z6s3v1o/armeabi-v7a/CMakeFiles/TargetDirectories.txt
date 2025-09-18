@@ -1,0 +1,2 @@
+/home/rcts/Downloads/updated/Mindsye_final_code/mindseye_now/mindseye/android/app/.cxx/RelWithDebInfo/6z6s3v1o/armeabi-v7a/CMakeFiles/edit_cache.dir
+/home/rcts/Downloads/updated/Mindsye_final_code/mindseye_now/mindseye/android/app/.cxx/RelWithDebInfo/6z6s3v1o/armeabi-v7a/CMakeFiles/rebuild_cache.dir

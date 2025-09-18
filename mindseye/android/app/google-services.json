@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "734336910396",
+    "project_id": "mindseyeotp-29c75",
+    "storage_bucket": "mindseyeotp-29c75.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:734336910396:android:94147355c2b4783582ef39",
+        "android_client_info": {
+          "package_name": "com.example.mindseye"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDEyvdEpQl23X4tHyEwt3vbFNvofGV95ao"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

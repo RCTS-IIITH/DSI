@@ -1,0 +1,951 @@
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:intl/intl.dart';
+import 'package:mindseye/childReportDetails.dart';
+import 'package:http/http.dart' as http;
+import 'package:mindseye/shared_prefs_helper.dart';
+
+enum ReportViewMode { detailed, compact, grid }
+
+class ReportsDashboardScreen extends StatefulWidget {
+  @override
+  _ReportsDashboardScreenState createState() => _ReportsDashboardScreenState();
+}
+
+class _ReportsDashboardScreenState extends State<ReportsDashboardScreen> {
+  String? selectedSchool = 'All Schools';
+  double? maxScore;
+  int? age;
+  DateTime? startDate;
+  DateTime? endDate;
+  String? clinicName;
+  bool labelledManually = false;
+  bool unlabelled = false;
+  List<String> availableSchools = ['All Schools'];
+  List<Map<String, dynamic>> students = [];
+  List<Map<String, dynamic>> filteredStudents = [];
+  String backendUrl = dotenv.env['BACKEND_URL'] ?? "http://localhost:3000";
+  Map<String, String> schoolNameToIdMap = {};
+  bool isLoading = false;
+  String? errorMessage;
+
+  // New: track view mode
+  ReportViewMode viewMode = ReportViewMode.compact;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeDashboard();
+    _loadClinicName();
+  }
+
+  Future<void> _loadClinicName() async {
+    try {
+      final userDetails = await SharedPrefsHelper.getUserDetails();
+      setState(() {
+        clinicName = userDetails['clinicName'] ?? 'Clinic Not Set';
+      });
+    } catch (e) {
+      setState(() {
+        clinicName = 'Unknown Clinic';
+      });
+    }
+  }
+
+  Future<void> _initializeDashboard() async {
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
+    try {
+      await _loadSchools();
+      await getReports();
+    } catch (e) {
+      setState(() {
+        errorMessage = 'Error initializing dashboard: $e';
+      });
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  Future<void> getReports() async {
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
+    try {
+      final userDetails = await SharedPrefsHelper.getUserDetails();
+      final professionalId = userDetails['phoneNumber'];
+
+      final uri = Uri.parse(
+          '$backendUrl/api/reports/get-professional-reports?professionalId=$professionalId');
+
+      final response = await http.get(uri);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          students = (data as List).map<Map<String, dynamic>>((report) {
+            final images = report['images'] ?? {};
+            final houseScore = images['house']?['score'];
+            final treeScore = images['tree']?['score'];
+            final personScore = images['person']?['score'];
+
+            final houseManualScore = images['house']?['manualScore'];
+            final treeManualScore = images['tree']?['manualScore'];
+            final personManualScore = images['person']?['manualScore'];
+
+            int? displayScore;
+            if (houseManualScore != null ||
+                treeManualScore != null ||
+                personManualScore != null) {
+              int total = 0;
+              int count = 0;
+              if (houseManualScore != null) {
+                total += (houseManualScore as num).toInt();
+                count++;
+              }
+              if (treeManualScore != null) {
+                total += (treeManualScore as num).toInt();
+                count++;
+              }
+              if (personManualScore != null) {
+                total += (personManualScore as num).toInt();
+                count++;
+              }
+              displayScore = count > 0 ? (total / count).round() : null;
+            } else if (houseScore != null ||
+                treeScore != null ||
+                personScore != null) {
+              int total = 0;
+              int count = 0;
+              if (houseScore != null) {
+                total += (houseScore as num).toInt();
+                count++;
+              }
+              if (treeScore != null) {
+                total += (treeScore as num).toInt();
+                count++;
+              }
+              if (personScore != null) {
+                total += (personScore as num).toInt();
+                count++;
+              }
+              displayScore = count > 0 ? (total / count).round() : null;
+            }
+
+            final schoolName = report['schoolName'] ??
+                (report['schoolId'] is Map
+                    ? report['schoolId']['schoolName']
+                    : 'N/A');
+
+            return {
+              'id': report['_id'],
+              'name': report['childsName'] ?? 'N/A',
+              'score': displayScore,
+              'manualScore': displayScore,
+              'modelScore': displayScore,
+              'labelledManually': report['flagforlabel'] == true,
+              'schoolName': schoolName,
+              'schoolId':
+                  report['schoolId'] is Map ? report['schoolId']['_id'] : null,
+              'age': report['age'],
+              'submittedAt': report['submittedAt'],
+              'houseScore': houseScore,
+              'treeScore': treeScore,
+              'personScore': personScore,
+              'houseManualScore': houseManualScore,
+              'treeManualScore': treeManualScore,
+              'personManualScore': personManualScore,
+            };
+          }).toList();
+
+          filteredStudents = [...students];
+        });
+      } else {
+        setState(() {
+          errorMessage = 'Failed to fetch reports: ${response.statusCode}';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        errorMessage = 'Error fetching reports: $e';
+      });
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadSchools() async {
+    try {
+      final userDetails = await SharedPrefsHelper.getUserDetails();
+      final professionalId = userDetails['phoneNumber'];
+      final uri = Uri.parse(
+          '$backendUrl/api/users/verify-professional?professionalId=$professionalId');
+
+      final response = await http.get(uri);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['found']) {
+          final assignedSchools =
+              (data['professional']['assignedSchools'] as List?) ?? [];
+
+          final safeSchools = assignedSchools.where((s) {
+            if (s == null) return false;
+            if (s is Map) {
+              return s['name'] != null;
+            }
+            return false;
+          }).toList();
+
+          setState(() {
+            availableSchools = [
+              'All Schools',
+              ...safeSchools
+                  .map((school) => (school['name'] ?? '').toString())
+                  .where((s) => s.isNotEmpty)
+                  .toList()
+            ];
+
+            schoolNameToIdMap = Map.fromEntries(
+              safeSchools.map((school) => MapEntry(
+                    (school['name'] ?? '').toString(),
+                    (school['id'] ?? '').toString(),
+                  )),
+            );
+          });
+        }
+      }
+    } catch (e) {
+      // silently fail
+    }
+  }
+
+  Future<void> _selectStartDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: startDate ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2101),
+    );
+    if (picked != null) {
+      setState(() {
+        startDate = picked;
+      });
+    }
+  }
+
+  Future<void> _selectEndDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: endDate ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2101),
+    );
+    if (picked != null) {
+      setState(() {
+        endDate = picked;
+      });
+    }
+  }
+
+  void _applyFilters() {
+    setState(() {
+      filteredStudents = students.where((student) {
+        if (selectedSchool != null &&
+            selectedSchool!.isNotEmpty &&
+            selectedSchool != 'All Schools') {
+          if (student['schoolName'] != selectedSchool) return false;
+        }
+
+        if (maxScore != null) {
+          final studentScore = (student['score'] is num)
+              ? (student['score'] as num).toDouble()
+              : parseScore(student['score']).toDouble();
+          if (studentScore > maxScore!) return false;
+        }
+
+        if (age != null) {
+          final studentAge = student['age'] is int
+              ? student['age']
+              : int.tryParse(student['age']?.toString() ?? '');
+          if (studentAge != age) return false;
+        }
+
+        if (startDate != null && student['submittedAt'] != null) {
+          try {
+            final submittedAt = DateTime.parse(student['submittedAt']);
+            if (submittedAt.isBefore(startDate!)) return false;
+          } catch (_) {}
+        }
+        if (endDate != null && student['submittedAt'] != null) {
+          try {
+            final submittedAt = DateTime.parse(student['submittedAt']);
+            if (submittedAt.isAfter(endDate!)) return false;
+          } catch (_) {}
+        }
+
+        if (unlabelled && (student['labelledManually'] == true)) {
+          return false;
+        }
+        if (labelledManually && !(student['labelledManually'] == true)) {
+          return false;
+        }
+
+        return true;
+      }).toList();
+    });
+  }
+
+  void _resetFilters() {
+    setState(() {
+      selectedSchool = 'All Schools';
+      maxScore = null;
+      age = null;
+      startDate = null;
+      endDate = null;
+      labelledManually = false;
+      unlabelled = false;
+      filteredStudents = [...students];
+    });
+  }
+
+  Widget _compactInput({
+    required String hintText,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+    ValueChanged<String>? onChanged,
+  }) {
+    return Container(
+      height: 40,
+      child: TextField(
+        onChanged: onChanged,
+        keyboardType: keyboardType,
+        decoration: InputDecoration(
+          contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+          prefixIcon: Icon(icon, size: 18, color: Colors.black54),
+          hintText: hintText,
+          filled: true,
+          fillColor: Colors.grey[200],
+          border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide.none),
+        ),
+        style: TextStyle(fontSize: 14),
+      ),
+    );
+  }
+
+  int parseScore(dynamic score) {
+    if (score == null) return 0;
+    if (score is int) return score;
+    if (score is double) return score.round();
+    if (score is String) return int.tryParse(score) ?? 0;
+    return 0;
+  }
+
+  Widget _schoolDropdownCompact() {
+    return Container(
+      height: 40,
+      child: DropdownButtonFormField<String?>(
+        isExpanded: true,
+        value: selectedSchool,
+        items: availableSchools
+            .map((school) => DropdownMenuItem<String?>(
+                  value: school,
+                  child: Text(
+                    school ?? 'All Schools',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ))
+            .toList(),
+        onChanged: (value) {
+          setState(() {
+            selectedSchool = value ?? 'All Schools';
+            _applyFilters();
+          });
+        },
+        decoration: InputDecoration(
+          prefixIcon: Icon(Icons.school, size: 18),
+          filled: true,
+          fillColor: Colors.grey[200],
+          contentPadding: EdgeInsets.symmetric(horizontal: 8),
+          border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide.none),
+        ),
+        style: TextStyle(fontSize: 14, color: Colors.black87),
+      ),
+    );
+  }
+
+  Widget _dateButton(String label, DateTime? date, VoidCallback onTap) {
+    final text = date != null ? DateFormat('dd MMM').format(date) : label;
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+              color: Colors.grey[200], borderRadius: BorderRadius.circular(10)),
+          padding: EdgeInsets.symmetric(horizontal: 8),
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(Icons.calendar_today_outlined, size: 16),
+            SizedBox(width: 6),
+            Text(text, style: TextStyle(fontSize: 13)),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactFilters() {
+    return Column(children: [
+      Row(children: [
+        Expanded(child: _schoolDropdownCompact()),
+        SizedBox(width: 8),
+        Container(
+          height: 40,
+          padding: EdgeInsets.symmetric(horizontal: 8),
+          child: Row(children: [
+            Checkbox(
+              value: unlabelled,
+              onChanged: (v) {
+                setState(() {
+                  unlabelled = v ?? false;
+                  _applyFilters();
+                });
+              },
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
+            ),
+            SizedBox(width: 4),
+            Text('Unlabelled', style: TextStyle(fontSize: 13)),
+          ]),
+        ),
+      ]),
+      SizedBox(height: 8),
+      Row(children: [
+        Expanded(
+          child: _compactInput(
+            hintText: "Max Score",
+            icon: Icons.score,
+            keyboardType: TextInputType.number,
+            onChanged: (value) => setState(
+                () => maxScore = value.isEmpty ? null : double.tryParse(value)),
+          ),
+        ),
+        SizedBox(width: 8),
+        Expanded(
+          child: _compactInput(
+            hintText: "Age",
+            icon: Icons.accessibility,
+            keyboardType: TextInputType.number,
+            onChanged: (value) => setState(
+                () => age = value.isEmpty ? null : int.tryParse(value)),
+          ),
+        ),
+      ]),
+      SizedBox(height: 8),
+      Row(children: [
+        _dateButton('Start', startDate, _selectStartDate),
+        SizedBox(width: 8),
+        _dateButton('End', endDate, _selectEndDate),
+      ]),
+      SizedBox(height: 8),
+      Row(children: [
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: _applyFilters,
+            icon: Icon(Icons.filter_alt, size: 18),
+            label: Text("Apply"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.black,
+              foregroundColor: Colors.white,
+              padding: EdgeInsets.symmetric(vertical: 10),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ),
+        SizedBox(width: 8),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: _resetFilters,
+            icon: Icon(Icons.clear, size: 18),
+            label: Text("Reset"),
+            style: OutlinedButton.styleFrom(
+              padding: EdgeInsets.symmetric(vertical: 10),
+              side: BorderSide(color: Colors.grey.shade400),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ),
+      ]),
+    ]);
+  }
+
+  // Detailed card (larger, shows sections and school)
+  Widget _buildDetailedReportCard(Map<String, dynamic> student) {
+    final studentScore = student['score'] is num
+        ? (student['score'] as num).toDouble()
+        : parseScore(student['score']).toDouble();
+    return InkWell(
+      onTap: () => _openChildReport(student),
+      child: Card(
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        margin: EdgeInsets.symmetric(vertical: 6),
+        child: Container(
+          padding: EdgeInsets.all(14),
+          child: Row(children: [
+            CircleAvatar(
+                radius: 26,
+                backgroundColor: Colors.grey[300],
+                child: Icon(Icons.person_outline, color: Colors.white)),
+            SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Expanded(
+                          child: Text(student['name'] ?? 'Unknown',
+                              style: TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.bold))),
+                      SizedBox(width: 8),
+                      if (student['houseManualScore'] != null ||
+                          student['treeManualScore'] != null ||
+                          student['personManualScore'] != null)
+                        Chip(
+                            label: Text("Manual Score Available"),
+                            backgroundColor: Colors.orange.shade100,
+                            labelStyle:
+                                TextStyle(color: Colors.orange.shade800))
+                      else if (student['houseScore'] != null ||
+                          student['treeScore'] != null ||
+                          student['personScore'] != null)
+                        Chip(
+                            label: Text("AI Score Ready"),
+                            backgroundColor: Colors.blue.shade100,
+                            labelStyle: TextStyle(color: Colors.blue.shade800))
+                      else
+                        Chip(
+                            label: Text("Pending"),
+                            backgroundColor: Colors.grey.shade200,
+                            labelStyle: TextStyle(color: Colors.grey.shade700)),
+                    ]),
+                    SizedBox(height: 8),
+                    // section scores (house/tree/person) if available
+                    if ((student['houseScore'] != null ||
+                        student['treeScore'] != null ||
+                        student['personScore'] != null ||
+                        student['houseManualScore'] != null ||
+                        student['treeManualScore'] != null ||
+                        student['personManualScore'] != null))
+                      Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (student['houseScore'] != null ||
+                                student['houseManualScore'] != null)
+                              Row(children: [
+                                Icon(Icons.home, size: 14, color: Colors.brown),
+                                SizedBox(width: 6),
+                                Text(
+                                    "House: ${student['houseManualScore'] ?? student['houseScore'] ?? 'N/A'}%",
+                                    style: TextStyle(
+                                        fontSize: 12, color: Colors.grey[700]))
+                              ]),
+                            if (student['treeScore'] != null ||
+                                student['treeManualScore'] != null)
+                              Row(children: [
+                                Icon(Icons.park, size: 14, color: Colors.green),
+                                SizedBox(width: 6),
+                                Text(
+                                    "Tree: ${student['treeManualScore'] ?? student['treeScore'] ?? 'N/A'}%",
+                                    style: TextStyle(
+                                        fontSize: 12, color: Colors.grey[700]))
+                              ]),
+                            if (student['personScore'] != null ||
+                                student['personManualScore'] != null)
+                              Row(children: [
+                                Icon(Icons.person,
+                                    size: 14, color: Colors.orange),
+                                SizedBox(width: 6),
+                                Text(
+                                    "Person: ${student['personManualScore'] ?? student['personScore'] ?? 'N/A'}%",
+                                    style: TextStyle(
+                                        fontSize: 12, color: Colors.grey[700]))
+                              ]),
+                            SizedBox(height: 8),
+                          ]),
+                    Row(children: [
+                      Expanded(
+                          child: LinearProgressIndicator(
+                              value: (studentScore / 100).clamp(0.0, 1.0),
+                              minHeight: 6,
+                              color: studentScore >= 70
+                                  ? Colors.green
+                                  : studentScore > 0
+                                      ? Colors.orange
+                                      : Colors.red,
+                              backgroundColor: Colors.grey[300])),
+                      SizedBox(width: 8),
+                      Text("${studentScore.toInt()}%",
+                          style: TextStyle(fontWeight: FontWeight.bold)),
+                    ]),
+                    SizedBox(height: 6),
+                    // show school & age in smaller text
+                    Row(children: [
+                      if (student['age'] != null)
+                        Text("${student['age']} yrs",
+                            style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      SizedBox(width: 12),
+                      if (student['schoolName'] != null)
+                        Expanded(
+                            child: Text(student['schoolName'],
+                                style:
+                                    TextStyle(fontSize: 12, color: Colors.grey),
+                                overflow: TextOverflow.ellipsis)),
+                    ]),
+                  ]),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  // Compact card (previous compact style)
+  Widget _buildCompactReportCard(Map<String, dynamic> student) {
+    final studentScore = student['score'] is num
+        ? (student['score'] as num).toDouble()
+        : parseScore(student['score']).toDouble();
+    return InkWell(
+      onTap: () => _openChildReport(student),
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: EdgeInsets.symmetric(vertical: 6),
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Row(children: [
+            CircleAvatar(
+                radius: 20,
+                backgroundColor: Colors.grey[300],
+                child: Icon(Icons.person_outline, color: Colors.white)),
+            SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Expanded(
+                          child: Text(student['name'] ?? 'Unknown',
+                              style: TextStyle(
+                                  fontSize: 14, fontWeight: FontWeight.w700),
+                              overflow: TextOverflow.ellipsis)),
+                      SizedBox(width: 6),
+                      if (student['houseManualScore'] != null ||
+                          student['treeManualScore'] != null ||
+                          student['personManualScore'] != null)
+                        Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 4),
+                            decoration: BoxDecoration(
+                                color: Colors.orange.shade100,
+                                borderRadius: BorderRadius.circular(8)),
+                            child: Text("Manual",
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.orange.shade800)))
+                      else if (student['houseScore'] != null ||
+                          student['treeScore'] != null ||
+                          student['personScore'] != null)
+                        Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 4),
+                            decoration: BoxDecoration(
+                                color: Colors.blue.shade100,
+                                borderRadius: BorderRadius.circular(8)),
+                            child: Text("AI",
+                                style: TextStyle(
+                                    fontSize: 11, color: Colors.blue.shade800)))
+                      else
+                        SizedBox.shrink(),
+                    ]),
+                    SizedBox(height: 6),
+                    Row(children: [
+                      if (student['age'] != null)
+                        Text("${student['age']} yrs",
+                            style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      if (student['schoolName'] != null) ...[
+                        SizedBox(width: 8),
+                        Expanded(
+                            child: Text(student['schoolName'],
+                                style:
+                                    TextStyle(fontSize: 12, color: Colors.grey),
+                                overflow: TextOverflow.ellipsis))
+                      ],
+                    ]),
+                    SizedBox(height: 8),
+                    Row(children: [
+                      Expanded(
+                          child: LinearProgressIndicator(
+                              value: (studentScore / 100).clamp(0.0, 1.0),
+                              minHeight: 6,
+                              color: studentScore >= 70
+                                  ? Colors.green
+                                  : studentScore > 0
+                                      ? Colors.orange
+                                      : Colors.red,
+                              backgroundColor: Colors.grey[300])),
+                      SizedBox(width: 8),
+                      Text("${studentScore.toInt()}%",
+                          style: TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.bold)),
+                    ]),
+                  ]),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  // Grid / Dense card - minimal height, no school text, small avatar
+  Widget _buildGridReportCard(Map<String, dynamic> student) {
+    final studentScore = student['score'] is num
+        ? (student['score'] as num).toDouble()
+        : parseScore(student['score']).toDouble();
+    return InkWell(
+      onTap: () => _openChildReport(student),
+      child: Card(
+        elevation: 1,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        margin: EdgeInsets.all(6),
+        child: Container(
+          padding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+          child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                CircleAvatar(
+                    radius: 16,
+                    backgroundColor: Colors.grey[300],
+                    child: Icon(Icons.person, size: 16, color: Colors.white)),
+                SizedBox(height: 8),
+                Text(student['name'] ?? 'Unknown',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1),
+                SizedBox(height: 8),
+                Expanded(
+                  child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          height: 6,
+                          child: LinearProgressIndicator(
+                            value: (studentScore / 100).clamp(0.0, 1.0),
+                            minHeight: 6,
+                            color: studentScore >= 70
+                                ? Colors.green
+                                : studentScore > 0
+                                    ? Colors.orange
+                                    : Colors.red,
+                            backgroundColor: Colors.grey[300],
+                          ),
+                        ),
+                        SizedBox(height: 6),
+                        Text("${studentScore.toInt()}%",
+                            style: TextStyle(
+                                fontSize: 12, fontWeight: FontWeight.bold)),
+                      ]),
+                ),
+              ]),
+        ),
+      ),
+    );
+  }
+
+  void _openChildReport(Map<String, dynamic> student) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+          builder: (context) =>
+              ChildReport(data: "${student['id']}", reportId: student['id'])),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Icon(Icons.inbox, size: 48, color: Colors.grey[400]),
+        SizedBox(height: 12),
+        Text("No reports found.",
+            style: TextStyle(fontSize: 16, color: Colors.grey[600])),
+      ]),
+    );
+  }
+
+  Widget _buildErrorState(String message) {
+    return Center(
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
+        SizedBox(height: 12),
+        Text(message,
+            style: TextStyle(fontSize: 16, color: Colors.red[600]),
+            textAlign: TextAlign.center),
+        SizedBox(height: 12),
+        ElevatedButton.icon(
+          onPressed: _initializeDashboard,
+          icon: Icon(Icons.refresh),
+          label: Text("Retry"),
+          style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.black, foregroundColor: Colors.white),
+        )
+      ]),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // AppBar small toggle via popup menu (Detailed / Compact / Grid)
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.blue,
+        foregroundColor: Colors.black,
+        elevation: 0,
+        title: Text('Reports Dashboard',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        centerTitle: true,
+        leading: IconButton(
+            icon: Icon(Icons.arrow_back_ios_new),
+            onPressed: () => Navigator.pop(context)),
+        actions: [
+          IconButton(
+              icon: Icon(Icons.refresh),
+              tooltip: "Refresh",
+              onPressed: _initializeDashboard),
+          PopupMenuButton<ReportViewMode>(
+            tooltip: "View mode",
+            onSelected: (mode) {
+              setState(() {
+                viewMode = mode;
+              });
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                  value: ReportViewMode.detailed,
+                  child: Row(children: [
+                    Icon(Icons.view_agenda, size: 18),
+                    SizedBox(width: 8),
+                    Text('Detailed')
+                  ])),
+              PopupMenuItem(
+                  value: ReportViewMode.compact,
+                  child: Row(children: [
+                    Icon(Icons.view_list, size: 18),
+                    SizedBox(width: 8),
+                    Text('Compact')
+                  ])),
+              PopupMenuItem(
+                  value: ReportViewMode.grid,
+                  child: Row(children: [
+                    Icon(Icons.grid_view, size: 18),
+                    SizedBox(width: 8),
+                    Text('Grid (2-col)')
+                  ])),
+            ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14.0),
+              child: Row(children: [
+                Icon(
+                  viewMode == ReportViewMode.detailed
+                      ? Icons.view_agenda
+                      : viewMode == ReportViewMode.compact
+                          ? Icons.view_list
+                          : Icons.grid_view,
+                  size: 20,
+                ),
+                SizedBox(width: 6),
+                Icon(Icons.arrow_drop_down),
+              ]),
+            ),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: isLoading
+            ? Center(child: CircularProgressIndicator())
+            : errorMessage != null
+                ? _buildErrorState(errorMessage!)
+                : Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12.0, vertical: 12),
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Filter Reports',
+                              style: TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.bold)),
+                          SizedBox(height: 8),
+                          _buildCompactFilters(),
+                          SizedBox(height: 12),
+                          // LIST / GRID area
+                          Expanded(
+                            child: filteredStudents.isEmpty
+                                ? _buildEmptyState()
+                                : Builder(builder: (context) {
+                                    if (viewMode == ReportViewMode.grid) {
+                                      // 2-column grid dense
+                                      return GridView.builder(
+                                        gridDelegate:
+                                            SliverGridDelegateWithFixedCrossAxisCount(
+                                          crossAxisCount: 2,
+                                          childAspectRatio: 0.85, // short cards
+                                          crossAxisSpacing: 4,
+                                          mainAxisSpacing: 4,
+                                        ),
+                                        itemCount: filteredStudents.length,
+                                        itemBuilder: (context, index) {
+                                          final student =
+                                              filteredStudents[index];
+                                          return _buildGridReportCard(student);
+                                        },
+                                      );
+                                    } else {
+                                      // list view for compact/detailed
+                                      return ListView.builder(
+                                        itemCount: filteredStudents.length,
+                                        itemBuilder: (context, index) {
+                                          final student =
+                                              filteredStudents[index];
+                                          if (viewMode ==
+                                              ReportViewMode.detailed) {
+                                            return _buildDetailedReportCard(
+                                                student);
+                                          } else {
+                                            return _buildCompactReportCard(
+                                                student);
+                                          }
+                                        },
+                                      );
+                                    }
+                                  }),
+                          ),
+                        ]),
+                  ),
+      ),
+    );
+  }
+}
+
