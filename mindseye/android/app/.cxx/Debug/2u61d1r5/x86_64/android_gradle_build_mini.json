@@ -1,0 +1,20 @@
+{
+  "buildFiles": [
+    "/home/rcts/snap/flutter/common/flutter/packages/flutter_tools/gradle/src/main/groovy/CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "/home/rcts/Android/Sdk/cmake/3.22.1/bin/ninja",
+      "-C",
+      "/home/rcts/Downloads/updated/Mindsye_final_code/mindseye_now/mindseye/android/app/.cxx/Debug/2u61d1r5/x86_64",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "/home/rcts/Android/Sdk/cmake/3.22.1/bin/ninja",
+    "-C",
+    "/home/rcts/Downloads/updated/Mindsye_final_code/mindseye_now/mindseye/android/app/.cxx/Debug/2u61d1r5/x86_64",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {}
+}
